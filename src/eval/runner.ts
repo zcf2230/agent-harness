@@ -7,7 +7,7 @@ import { RunLog } from '../agent/checkpoint.ts';
 import { newRunState, runAgent } from '../agent/loop.ts';
 import { safeResolve } from '../agent/sandbox.ts';
 import type { McpBridge } from '../mcp/bridge.ts';
-import { gradeTask } from './grade.ts';
+import { gradeTask, requiredOutputFiles } from './grade.ts';
 import { batchTs, fmtSec, padCell, slug, uid } from '../util.ts';
 
 export interface TaskRecord {
@@ -72,7 +72,7 @@ export async function executeTask(opts: {
     });
     log.saveState(state);
   }
-  state = await runAgent({ provider: opts.provider, cfg, state, workspace, log, mcp: opts.mcp ?? null, print: opts.print });
+  state = await runAgent({ provider: opts.provider, cfg, state, workspace, log, mcp: opts.mcp ?? null, requiredFiles: requiredOutputFiles(task), print: opts.print });
   const graded = await gradeTask(task, workspace, state.answer, cfg);
   const duration_ms = Date.now() - startAt;
   const record: TaskRecord = {

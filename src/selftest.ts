@@ -10,9 +10,8 @@ import { executeTool } from './agent/tools.ts';
 import { RunLog } from './agent/checkpoint.ts';
 import { newRunState, runAgent } from './agent/loop.ts';
 import { connectMcpServers, emptyMcpBridge } from './mcp/bridge.ts';
-import { gradeTask } from './eval/grade.ts';
+import { gradeTask, loadTasks, requiredOutputFiles } from './eval/grade.ts';
 import { executeTask } from './eval/runner.ts';
-import { loadTasks } from './eval/grade.ts';
 import { MockProvider, callTool, finish } from './providers/mock.ts';
 import { toWire } from './providers/openai.ts';
 import type { ChatProvider, Message, TaskDef } from './types.ts';
@@ -85,6 +84,11 @@ async function testTools(): Promise<void> {
   check('run_js 失败被捕获而非崩溃', !bad.ok && bad.output.includes('boom'), bad.output);
   const evil = await executeTool(ctx, 'read_file', JSON.stringify({ path: '../../../etc/passwd' }));
   check('工具层拒绝越界读取', !evil.ok && evil.output.includes('越界'), evil.output);
+  fs.writeFileSync(path.join(tmpRoot, 'outside-secret.txt'), 'SECRET-OUTSIDE-WS');
+  const jailRead = await executeTool(ctx, 'run_js', JSON.stringify({ code: `import fs from 'node:fs'; try { fs.readFileSync(${JSON.stringify(path.join(tmpRoot, 'outside-secret.txt'))}, 'utf8'); console.log('LEAKED'); } catch (e) { console.log('DENIED', e.code); }` }));
+  check('run_js 被 Node 权限模型关进工作区（越界读被拒）', jailRead.output.includes('DENIED') && !jailRead.output.includes('LEAKED'), jailRead.output);
+  const jailWrite = await executeTool(ctx, 'run_js', JSON.stringify({ code: `import fs from 'node:fs'; try { fs.writeFileSync(${JSON.stringify(path.join(tmpRoot, 'pwned.txt'))}, 'x'); console.log('WROTE'); } catch (e) { console.log('DENIED', e.code); }` }));
+  check('run_js 无法写工作区外', jailWrite.output.includes('DENIED') && !fs.existsSync(path.join(tmpRoot, 'pwned.txt')), jailWrite.output);
   const unknown = await executeTool(ctx, 'no_such_tool', '{}');
   check('未知工具返回错误而非异常', !unknown.ok && unknown.output.includes('未知工具'), unknown.output);
 }
@@ -190,6 +194,33 @@ async function testLoop(): Promise<void> {
   const resumed = RunLog.loadState(dir3);
   const state4 = await runAgent({ provider: new MockProvider(() => finish('续跑后完成')), cfg, state: resumed, workspace: ws, log: log3 });
   check('从 checkpoint 续跑成功', state4.status === 'final' && state4.turn === 2 && state4.answer === '续跑后完成', `turn=${state4.turn}`);
+
+  const loopPlan = (messages: Message[]) => {
+    const sawNudge = messages.some((m) => m.role === 'user' && (m.content ?? '').includes('接近回合上限'));
+    return sawNudge ? finish('收到收尾提醒，基于当前结果结束') : callTool('read_file', { path: 'nope.txt' });
+  };
+  const nudgeTask: TaskDef = { id: 'l5', name: '收尾测试', category: 'demo', prompt: 'p', max_turns: 4 };
+  const nudgedCfg = { ...cfg, terminationNudge: true };
+  const stateN = await runAgent({ provider: new MockProvider(loopPlan), cfg: nudgedCfg, state: newRunState(nudgeTask, nudgedCfg), workspace: ws, log: new RunLog(path.join(tmpRoot, 'run-nudge-log')) });
+  check('收尾轻推把停滞转为正常结束', stateN.status === 'final' && stateN.nudged === true && (stateN.answer ?? '').includes('收尾提醒'), `status=${stateN.status} nudged=${stateN.nudged}`);
+  const noNudgeCfg = { ...cfg, terminationNudge: false };
+  const stateNN = await runAgent({ provider: new MockProvider(loopPlan), cfg: noNudgeCfg, state: newRunState(nudgeTask, noNudgeCfg), workspace: ws, log: new RunLog(path.join(tmpRoot, 'run-nonudge-log')) });
+  check('关闭轻推则空转到上限', stateNN.status === 'max_turns' && stateNN.nudged === false, `status=${stateNN.status}`);
+  const repeatEvents = RunLog.loadEvents(path.join(tmpRoot, 'run-nudge-log')).filter((e) => e.type === 'tool_exec' && String(e.data.output).includes('重复'));
+  check('重复相同调用被检测并告警', repeatEvents.length >= 1, JSON.stringify(repeatEvents.length));
+
+  const dlTask: TaskDef = { id: 'dl', name: '交付物检测', category: 'demo', prompt: '写 out.txt 内容为 HI', max_turns: 6, grade: { type: 'file_regex', path: 'out.txt', pattern: 'HI' } };
+  check('从判分规则提取交付物', requiredOutputFiles(dlTask).join(',') === 'out.txt', JSON.stringify(requiredOutputFiles(dlTask)));
+  const dlWs = path.join(tmpRoot, 'run-dl-ws');
+  const dlLog = new RunLog(path.join(tmpRoot, 'run-dl-log'));
+  const dlPlan = (messages: Message[]) => {
+    const saw = messages.some((m) => m.role === 'user' && (m.content ?? '').includes('交付物缺失'));
+    return saw ? callTool('write_file', { path: 'out.txt', content: 'HI' }) : callTool('run_js', { code: 'console.log(1)' });
+  };
+  const dlCfg = { ...cfg, terminationNudge: true };
+  await runAgent({ provider: new MockProvider(dlPlan), cfg: dlCfg, state: newRunState(dlTask, dlCfg), workspace: dlWs, log: dlLog, requiredFiles: requiredOutputFiles(dlTask) });
+  check('交付物缺失触发定向提醒', RunLog.loadEvents(path.join(tmpRoot, 'run-dl-log')).some((e) => e.type === 'nudge' && e.data.type === 'deliverable'), '');
+  check('提醒后模型补齐交付物文件', fs.existsSync(path.join(dlWs, 'out.txt')) && fs.readFileSync(path.join(dlWs, 'out.txt'), 'utf8') === 'HI', '');
 }
 
 async function testWire(): Promise<void> {

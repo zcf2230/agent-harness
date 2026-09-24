@@ -110,6 +110,12 @@ function fmtExec(r: { code: number; stdout: string; stderr: string; timedOut: bo
   return s.trimEnd();
 }
 
+function nodeSandboxArgs(workspace: string, cfg: HarnessConfig): string[] {
+  if (!cfg.sandboxNodePermission) return [];
+  const ws = path.resolve(workspace);
+  return ['--permission', `--allow-fs-read=${ws}`, `--allow-fs-write=${ws}`];
+}
+
 function walkFiles(dir: string, base: string, acc: { rel: string; abs: string }[], limit: number): void {
   if (acc.length >= limit) return;
   let entries;
@@ -229,11 +235,12 @@ export async function executeTool(
         return done(true, hits.length ? clip(hits.join('\n'), cfg.maxOutputChars) : '无匹配');
       }
       case 'run_js': {
+        const pre = nodeSandboxArgs(ctx.workspace, cfg);
         const r = await runScript(ctx.workspace, 'mjs', String(args.code ?? ''), process.execPath, {
           cwd: ctx.workspace,
           timeoutMs: cfg.execTimeoutMs,
           maxOutput: cfg.maxOutputChars,
-        });
+        }, pre);
         return done(r.code === 0, clip(fmtExec(r), cfg.maxOutputChars));
       }
       case 'run_py': {

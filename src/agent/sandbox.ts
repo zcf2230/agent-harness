@@ -85,14 +85,15 @@ export async function runScript(
   ext: string,
   code: string,
   cmd: string,
-  o: ExecOptions
+  o: ExecOptions,
+  preArgs: string[] = []
 ): Promise<ExecResult> {
   const dir = path.join(workspace, '.sandbox');
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `s-${uid(6)}.${ext}`);
   fs.writeFileSync(file, code, 'utf8');
   try {
-    return await exec(cmd, [path.resolve(file)], o);
+    return await exec(cmd, [...preArgs, path.resolve(file)], o);
   } finally {
     try {
       fs.rmSync(file, { force: true });

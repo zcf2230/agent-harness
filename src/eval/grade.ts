@@ -87,6 +87,12 @@ export async function gradeTask(
   }
 }
 
+export function requiredOutputFiles(task: TaskDef): string[] {
+  const rule = task.grade;
+  if (rule && rule.type === 'file_regex') return [rule.path];
+  return [];
+}
+
 export function loadTasks(dir: string): TaskDef[] {
   if (!fs.existsSync(dir)) return [];
   const out: TaskDef[] = [];

@@ -14,6 +14,8 @@ export interface HarnessConfig {
   execTimeoutMs: number;
   maxOutputChars: number;
   pythonCommand: string;
+  sandboxNodePermission: boolean;
+  terminationNudge: boolean;
   runsDir: string;
   priceInputPerMTok: number;
   priceOutputPerMTok: number;
@@ -33,6 +35,8 @@ export const DEFAULTS: HarnessConfig = {
   execTimeoutMs: 30000,
   maxOutputChars: 20000,
   pythonCommand: 'python',
+  sandboxNodePermission: true,
+  terminationNudge: true,
   runsDir: 'runs',
   priceInputPerMTok: 1,
   priceOutputPerMTok: 2,

@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['24.x']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Show toolchain
+        run: node --version
+      - name: Offline self-test (no API key required)
+        run: node src/cli.ts selftest
+      - name: Mock end-to-end eval (no API key required)
+        run: node src/cli.ts eval --all --mock --concurrency 4

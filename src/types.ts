@@ -75,6 +75,7 @@ export interface RunState {
   contextBudget: number;
   turn: number;
   compactions: number;
+  nudged: boolean;
   last_prompt_tokens: number;
   usage: Usage;
   status: RunStatus;

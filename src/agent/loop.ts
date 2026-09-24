@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { ChatProvider, Message, RunState, TaskDef } from '../types.ts';
 import type { HarnessConfig } from '../config.ts';
 import type { RunLog } from './checkpoint.ts';
@@ -34,6 +36,7 @@ export function newRunState(task: TaskDef, cfg: HarnessConfig): RunState {
     contextBudget: task.context_budget_tokens ?? cfg.contextBudgetTokens,
     turn: 0,
     compactions: 0,
+    nudged: false,
     last_prompt_tokens: 0,
     usage: { prompt_tokens: 0, completion_tokens: 0 },
     status: 'running',
@@ -54,6 +57,7 @@ export interface RunOptions {
   workspace: string;
   log: RunLog;
   mcp?: McpBridge | null;
+  requiredFiles?: string[];
   print?: (s: string) => void;
 }
 
@@ -64,9 +68,33 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
   const specs = mcp && mcp.specs.length > 0 ? TOOL_SPECS.concat(mcp.specs) : TOOL_SPECS;
   state.status = 'running';
   let finished = false;
+  let prevSig = '';
+  const deliverableReminded = new Set<string>();
   try {
     while (state.turn < state.max_turns && !finished) {
       state.turn++;
+      if (cfg.terminationNudge && !state.nudged && state.turn >= state.max_turns - 1) {
+        state.nudged = true;
+        const nudge: Message = {
+          role: 'user',
+          content: '⚠ 提醒：你已接近回合上限。若任务已完成，请立即调用 finish 提交最终答案；若某步骤反复失败，请基于当前已有的结果 finish，并在答案中说明未完成之处，不要继续无进展的重复操作。',
+        };
+        state.messages.push(nudge);
+        log.event('nudge', { turn: state.turn, type: 'closing' });
+      }
+      const required = o.requiredFiles ?? [];
+      if (cfg.terminationNudge && required.length > 0 && state.turn >= state.max_turns - Math.max(1, Math.ceil(state.max_turns * 0.25))) {
+        const missing = required.filter((f) => !fs.existsSync(path.join(o.workspace, f)));
+        const key = missing.join(',');
+        if (missing.length > 0 && !deliverableReminded.has(key)) {
+          deliverableReminded.add(key);
+          state.messages.push({
+            role: 'user',
+            content: `⚠ 交付物缺失：任务要求但工作区尚未找到这些文件：${missing.join('、')}。请立即用 write_file 按任务要求生成它们，否则判分会因缺少文件而失败。`,
+          });
+          log.event('nudge', { turn: state.turn, type: 'deliverable', missing });
+        }
+      }
       const c = await maybeCompactGuarded(o.provider, state, cfg);
       if (c.compacted) {
         state.compactions++;
@@ -95,6 +123,10 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
         state.stop_reason = 'content_answer';
         break;
       }
+      const nonFinish = calls.filter((c) => c.name !== 'finish');
+      const sig = nonFinish.map((c) => `${c.name}:${c.arguments}`).sort().join('|');
+      const repeated = cfg.terminationNudge && sig !== '' && sig === prevSig;
+      prevSig = sig;
       for (const call of calls) {
         if (call.name === 'finish') {
           let answer = '';
@@ -113,11 +145,14 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
           mcp && mcp.has(call.name)
             ? await mcp.call(call.name, call.arguments)
             : await executeTool(toolsCtx, call.name, call.arguments);
+        const warn = repeated
+          ? '⚠ 你重复了与上一回合完全相同的工具调用，这通常意味着停滞。请改变方法，或基于当前结果调用 finish 结束任务。\n\n'
+          : '';
         const tm: Message = {
           role: 'tool',
           tool_call_id: call.id,
           name: call.name,
-          content: result.output,
+          content: warn + result.output,
         };
         state.messages.push(tm);
         log.event('tool_exec', {
@@ -126,7 +161,7 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
           args: call.arguments.length > 2000 ? call.arguments.slice(0, 2000) + '…' : call.arguments,
           ok: result.ok,
           ms: result.ms,
-          output: result.output,
+          output: tm.content,
         });
         o.print?.(`  ${result.ok ? '✓' : '✗'} ${call.name} ${(result.ms / 1000).toFixed(1)}s`);
       }
