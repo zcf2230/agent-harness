@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatProvider, Message, RunState, TaskDef } from '../types.ts';
 import type { HarnessConfig } from '../config.ts';
+import { computeCost } from '../config.ts';
 import type { RunLog } from './checkpoint.ts';
 import type { McpBridge } from '../mcp/bridge.ts';
 import { maybeCompact, estimate, type CompactResult } from './context.ts';
@@ -34,6 +35,8 @@ export function newRunState(task: TaskDef, cfg: HarnessConfig): RunState {
     model: cfg.model,
     max_turns: task.max_turns ?? cfg.maxTurns,
     contextBudget: task.context_budget_tokens ?? cfg.contextBudgetTokens,
+    maxCost: task.max_cost ?? cfg.maxCostPerTask,
+    deadlineMs: task.deadline_ms ?? cfg.deadlineMs,
     turn: 0,
     compactions: 0,
     nudged: false,
@@ -72,6 +75,18 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
   const deliverableReminded = new Set<string>();
   try {
     while (state.turn < state.max_turns && !finished) {
+      if (state.maxCost > 0 && computeCost(state.usage, cfg) >= state.maxCost) {
+        state.status = 'budget';
+        state.stop_reason = 'max_cost';
+        log.event('budget_stop', { turn: state.turn, reason: 'max_cost', cost: computeCost(state.usage, cfg) });
+        break;
+      }
+      if (state.deadlineMs > 0 && Date.now() - Date.parse(state.started_at) >= state.deadlineMs) {
+        state.status = 'budget';
+        state.stop_reason = 'deadline';
+        log.event('budget_stop', { turn: state.turn, reason: 'deadline' });
+        break;
+      }
       state.turn++;
       if (cfg.terminationNudge && !state.nudged && state.turn >= state.max_turns - 1) {
         state.nudged = true;

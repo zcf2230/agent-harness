@@ -44,6 +44,7 @@ const HELP = `DeepSeek Agent Harness
   node src/cli.ts eval --task c01,m01          只跑指定任务
   node src/cli.ts eval --category code-js      只跑指定类别
   node src/cli.ts bench --all --runs 3         多次跑分，产出 pass@R 与方差，识别 flaky 任务
+  node src/cli.ts ablate --all                 消融实验：逐一关闭核心机制，量化各自贡献
   node src/cli.ts mcp                          连接并列出 config.json 中配置的 MCP 工具
   node src/cli.ts selftest                     离线自检（不需要 API key）
 
@@ -219,6 +220,40 @@ async function main() {
         cfg,
         concurrency,
         runs,
+      });
+    } finally {
+      await mcp.close();
+    }
+    return;
+  }
+
+  if (cmd === 'ablate') {
+    const all = loadTasks(tasksDir);
+    const selected = opts.all === true ? all : filterTasks(all, opts);
+    if (selected.length === 0) {
+      console.error('没有匹配的任务（--all / --task id,id / --category 名称）');
+      process.exit(2);
+    }
+    if (!opts.mock && !opts.yes) {
+      console.log(`消融将跑 4 种配置 × ${selected.length} 任务 = ${4 * selected.length} 次真实调用。用 --yes 跳过，或 --mock 离线演示。`);
+      process.exit(3);
+    }
+    const { runAblation } = await import('./eval/runner.ts');
+    const concurrency = typeof opts.concurrency === 'string' ? parseInt(opts.concurrency, 10) || 4 : 4;
+    const configs = [
+      { name: 'baseline', note: '全部机制开启', override: {} },
+      { name: 'no_compaction', note: '关上下文压缩', override: { compactEnabled: false } },
+      { name: 'no_guardrail', note: '关收尾/交付物兜底', override: { terminationNudge: false } },
+      { name: 'no_sandbox', note: '关 Node 权限沙箱', override: { sandboxNodePermission: false } },
+    ];
+    const mcp = await maybeConnectMcp(cfg);
+    try {
+      await runAblation({
+        tasks: selected,
+        providerFactory: () => (opts.mock ? new MockProvider() : newOpenAI(cfg)),
+        cfg,
+        concurrency,
+        configs,
       });
     } finally {
       await mcp.close();

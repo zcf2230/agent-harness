@@ -10,6 +10,8 @@ export interface HarnessConfig {
   maxTokens: number;
   maxTurns: number;
   contextBudgetTokens: number;
+  maxCostPerTask: number;
+  deadlineMs: number;
   compactEnabled: boolean;
   execTimeoutMs: number;
   maxOutputChars: number;
@@ -31,6 +33,8 @@ export const DEFAULTS: HarnessConfig = {
   maxTokens: 4096,
   maxTurns: 12,
   contextBudgetTokens: 20000,
+  maxCostPerTask: 0,
+  deadlineMs: 0,
   compactEnabled: true,
   execTimeoutMs: 30000,
   maxOutputChars: 20000,

@@ -60,11 +60,13 @@ export interface TaskDef {
   difficulty?: 'easy' | 'hard';
   max_turns?: number;
   context_budget_tokens?: number;
+  max_cost?: number;
+  deadline_ms?: number;
   workspace_files?: WorkspaceFile[];
   grade?: GradeRule;
 }
 
-export type RunStatus = 'running' | 'final' | 'max_turns' | 'error';
+export type RunStatus = 'running' | 'final' | 'max_turns' | 'budget' | 'error';
 export interface RunState {
   task_id: string;
   name: string;
@@ -73,6 +75,8 @@ export interface RunState {
   model: string;
   max_turns: number;
   contextBudget: number;
+  maxCost: number;
+  deadlineMs: number;
   turn: number;
   compactions: number;
   nudged: boolean;

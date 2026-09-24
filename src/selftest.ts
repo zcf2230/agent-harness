@@ -10,10 +10,11 @@ import { executeTool } from './agent/tools.ts';
 import { RunLog } from './agent/checkpoint.ts';
 import { newRunState, runAgent } from './agent/loop.ts';
 import { connectMcpServers, emptyMcpBridge } from './mcp/bridge.ts';
+import { McpClient } from './mcp/client.ts';
 import { gradeTask, loadTasks, requiredOutputFiles } from './eval/grade.ts';
 import { executeTask } from './eval/runner.ts';
 import { MockProvider, callTool, finish } from './providers/mock.ts';
-import { toWire } from './providers/openai.ts';
+import { OpenAIProvider, toWire } from './providers/openai.ts';
 import type { ChatProvider, Message, TaskDef } from './types.ts';
 
 const cfg = { ...DEFAULTS, pythonCommand: process.env.HARNESS_PYTHON ?? 'python' };
@@ -240,6 +241,49 @@ async function testWire(): Promise<void> {
   check('system/user 原样映射', wire[0].role === 'system' && wire[1].role === 'user');
 }
 
+async function testBudget(): Promise<void> {
+  section('成本/时限预算止损');
+  const ws = path.join(tmpRoot, 'run-budget');
+  const bCfg = { ...cfg, maxCostPerTask: 0.00005 };
+  const st = await runAgent({ provider: new MockProvider(() => callTool('run_js', { code: 'console.log(1)' })), cfg: bCfg, state: newRunState({ id: 'bc', name: '成本上限', category: 'demo', prompt: 'x' }, bCfg), workspace: ws, log: new RunLog(path.join(tmpRoot, 'run-budget-log')) });
+  check('成本超限提前止损', st.status === 'budget' && st.stop_reason === 'max_cost', `status=${st.status} reason=${st.stop_reason}`);
+  const dCfg = { ...cfg, deadlineMs: 1 };
+  const dState = newRunState({ id: 'bd', name: '时限', category: 'demo', prompt: 'x' }, dCfg);
+  dState.started_at = new Date(Date.now() - 5000).toISOString();
+  const st2 = await runAgent({ provider: new MockProvider(() => callTool('run_js', { code: 'console.log(1)' })), cfg: dCfg, state: dState, workspace: ws, log: new RunLog(path.join(tmpRoot, 'run-deadline-log')) });
+  check('墙钟超时提前止损', st2.status === 'budget' && st2.stop_reason === 'deadline', `status=${st2.status} reason=${st2.stop_reason}`);
+}
+
+async function testResilience(): Promise<void> {
+  section('Provider/MCP 网络韧性');
+  const realFetch = globalThis.fetch;
+  try {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      if (calls <= 2) return { ok: false, status: 429, text: async () => 'slow down' };
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { role: 'assistant', content: 'hi' } }], usage: { prompt_tokens: 5, completion_tokens: 2 } }) };
+    }) as unknown as typeof fetch;
+    const p = new OpenAIProvider({ ...cfg, apiKey: 'x' });
+    const resp = await p.chat([{ role: 'user', content: 'hi' }], []);
+    check('429 触发指数退避重试并最终成功', calls === 3 && resp.message.content === 'hi', `calls=${calls}`);
+    calls = 0;
+    globalThis.fetch = (async () => { calls++; return { ok: false, status: 400, text: async () => 'bad request' }; }) as unknown as typeof fetch;
+    let threw = false;
+    try { await p.chat([{ role: 'user', content: 'hi' }], []); } catch { threw = true; }
+    check('400 不重试、立即抛出', threw && calls === 1, `calls=${calls} threw=${threw}`);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  const serverPath = fileURLToPath(new URL('./mcp/test-server.ts', import.meta.url));
+  const client = new McpClient({ command: process.execPath, args: [serverPath] });
+  await client.initialize();
+  let mcpErr = '';
+  try { await client.request('boom'); } catch (e: any) { mcpErr = String(e?.message ?? e); }
+  client.close();
+  check('MCP JSON-RPC error 被 reject', mcpErr.includes('故意失败') || mcpErr.includes('-32000'), mcpErr);
+}
+
 async function testGraders(): Promise<void> {
   section('判分器');
   const ws = path.join(tmpRoot, 'ws-grade');
@@ -372,6 +416,8 @@ async function main(): Promise<void> {
   await testLoop();
   await testMcp();
   await testWire();
+  await testBudget();
+  await testResilience();
   await testGraders();
   await testEvalE2E();
   await testBench();

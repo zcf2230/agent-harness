@@ -17,6 +17,7 @@ export interface TaskRecord {
   difficulty: string;
   pass: boolean;
   status: string;
+  reason: string | null;
   detail: string;
   turns: number;
   compactions: number;
@@ -82,6 +83,7 @@ export async function executeTask(opts: {
     difficulty: task.difficulty ?? 'easy',
     pass: graded.pass,
     status: state.status,
+    reason: graded.pass ? null : classifyFailure(state.status, graded.detail),
     detail: graded.detail,
     turns: state.turn,
     compactions: state.compactions,
@@ -108,6 +110,69 @@ async function pool<T, R>(items: T[], concurrency: number, worker: (item: T, ind
   });
   await Promise.all(runners);
   return results;
+}
+
+export interface AblationConfig {
+  name: string;
+  note: string;
+  override: Partial<HarnessConfig>;
+}
+
+export interface AblationRow {
+  name: string;
+  note: string;
+  passed: number;
+  total: number;
+  pass_rate: number;
+  mean_turns: number;
+  mean_prompt_tokens: number;
+  mean_cost: number;
+}
+
+export async function runAblation(o: {
+  tasks: TaskDef[];
+  providerFactory: () => ChatProvider;
+  cfg: HarnessConfig;
+  concurrency: number;
+  configs: AblationConfig[];
+  batchDir?: string;
+}): Promise<{ dir: string; rows: AblationRow[] }> {
+  const dir = o.batchDir ?? path.join(o.cfg.runsDir, `ablation-${batchTs()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const rows: AblationRow[] = [];
+  for (const c of o.configs) {
+    process.stdout.write(`\n===== 消融配置：${c.name}（${c.note}）=====\n`);
+    const cfg: HarnessConfig = { ...o.cfg, ...c.override };
+    const { records } = await evalSuite({
+      tasks: o.tasks,
+      providerFactory: o.providerFactory,
+      cfg,
+      concurrency: o.concurrency,
+      batchDir: path.join(dir, c.name),
+      quiet: true,
+    });
+    const passed = records.filter((r) => r.pass).length;
+    rows.push({
+      name: c.name,
+      note: c.note,
+      passed,
+      total: records.length,
+      pass_rate: Math.round((passed / Math.max(1, records.length)) * 1000) / 10,
+      mean_turns: Math.round(mean(records.map((r) => r.turns)) * 10) / 10,
+      mean_prompt_tokens: Math.round(mean(records.map((r) => r.prompt_tokens))),
+      mean_cost: Math.round(mean(records.map((r) => r.cost)) * 1e6) / 1e6,
+    });
+  }
+  fs.writeFileSync(path.join(dir, 'ablation.json'), JSON.stringify({ generated_at: new Date().toISOString(), model: o.cfg.model, configs: rows }, null, 2));
+  process.stdout.write(`\n===== 消融对照（${o.tasks.length} 任务）=====\n`);
+  process.stdout.write(`${padCell('配置', 16)}${padCell('通过率', 12)}${padCell('均回合', 8)}${padCell('均prompt_tok', 14)}费用/任务\n`);
+  for (const r of rows) {
+    process.stdout.write(
+      `${padCell(r.name, 16)}${padCell(`${r.passed}/${r.total}(${r.pass_rate}%)`, 12)}${padCell(String(r.mean_turns), 8)}${padCell(String(r.mean_prompt_tokens), 14)}${r.mean_cost.toFixed(4)}${o.cfg.currency}\n`
+    );
+  }
+  process.stdout.write(`→ ${path.join(dir, 'ablation.json')}\n`);
+  return { dir, rows };
 }
 
 export interface EvalOptions {
@@ -152,6 +217,7 @@ export async function evalSuite(o: EvalOptions): Promise<{ batchDir: string; rec
     compactions: records.reduce((s, r) => s + r.compactions, 0),
     by_category: breakdown(records, (r) => r.category),
     by_difficulty: breakdown(records, (r) => r.difficulty),
+    failure_reasons: countBy(records.filter((r) => !r.pass).map((r) => r.reason ?? 'other')),
     tasks: records,
   };
   fs.writeFileSync(path.join(batchDir, 'summary.json'), JSON.stringify(summary, null, 2));
@@ -162,6 +228,8 @@ export async function evalSuite(o: EvalOptions): Promise<{ batchDir: string; rec
   );
   process.stdout.write('按难度：' + fmtBreakdown(summary.by_difficulty) + '\n');
   process.stdout.write('按类别：' + fmtBreakdown(summary.by_category) + '\n');
+  const fr = Object.entries(summary.failure_reasons);
+  process.stdout.write('失败归因：' + (fr.length ? fr.map(([k, v]) => `${k}×${v}`).join('  ') : '无失败') + '\n');
   return { batchDir, records };
 }
 
@@ -184,6 +252,22 @@ function fmtBreakdown(b: Record<string, { pass: number; total: number; rate: num
   return Object.entries(b)
     .map(([k, v]) => `${k} ${v.pass}/${v.total}(${v.rate}%)`)
     .join('  ');
+}
+
+function countBy(xs: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const x of xs) out[x] = (out[x] ?? 0) + 1;
+  return out;
+}
+
+function classifyFailure(status: string, detail: string): string {
+  if (status === 'error') return 'provider_error';
+  if (status === 'budget') return 'budget';
+  if (status === 'max_turns') return 'max_turns';
+  if (detail.includes('文件不存在') || detail.includes('缺少')) return 'missing_deliverable';
+  if (detail.includes('提取不到数字')) return 'wrong_answer';
+  if (detail.includes('退出码') || detail.includes('未命中') || detail.includes('期望')) return 'grader_mismatch';
+  return 'other';
 }
 
 export interface BenchTaskStat {

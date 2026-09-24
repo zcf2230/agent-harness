@@ -21,6 +21,7 @@ node src/cli.ts tasks                 # 查看内置 22 个任务（12 基础 + 
 node src/cli.ts run --task c01        # 跑单个任务（自动判分）
 node src/cli.ts eval --all --yes      # 并发跑全部任务，产出 summary.json
 node src/cli.ts bench --all --runs 3  # 重复跑分，产出 pass@R / 方差 / flaky 任务
+node src/cli.ts ablate --all --yes    # 消融实验：逐一关机制，量化各自贡献
 node src/cli.ts run --resume runs/... # 从 checkpoint 续跑中断的任务
 node src/cli.ts mcp                   # 查看已连接的 MCP 工具（需在 config.json 配置）
 node src/cli.ts eval --all --mock     # 用内置 Mock 模型离线演示整条链路
@@ -52,7 +53,7 @@ src/
 │   ├── grade.ts           4 类独立判分器 + 任务加载
 │   ├── runner.ts          并发池、逐任务隔离工作区、汇总报告
 │   └── (tasks/*.json)     声明式任务：提示词 + 初始文件 + 判分规则
-└── selftest.ts            75 项离线断言，不联网验证全部机制
+└── selftest.ts            80 项离线断言，不联网验证全部机制
 ```
 
 ## 六个设计要点（也是难点）
@@ -175,8 +176,28 @@ node src/cli.ts run --prompt "用 add 工具算 20+22"   # 模型可直接调用
 保住关键锚点（各位数字）的前提下工作。同时也发现：模型会用 `run_js` 批量读文件**绕过**
 预设的长程压力，说明"沙箱越开放，越难逼出上下文瓶颈"本身是 harness 设计要权衡的点。
 
-> 简历叙事：不是"我做了个能跑分的脚本"，而是"我构建了带独立判分与失败归因的 agent 评测
-> 闭环，用真实跑分定位并修复了 4 个跨层 bug，并量化了模型在开放式任务上的终止缺陷"。
+**消融实验（`ablate` 命令，量化每个机制的贡献）**：`node src/cli.ts ablate --all --yes`
+在同一 22 任务集上逐一关闭核心机制，对照如下（deepseek-chat 真实跑分）：
+
+| 配置 | 通过率 | 均回合 | 均 prompt tok | 失败归因 |
+|---|---|---|---|---|
+| baseline（全开） | 22/22 (100%) | 4.2 | 8361 | — |
+| no_compaction | 22/22 | 4.6 | 8692 (+4%) | — |
+| no_guardrail | 21/22 (95.5%) | 4.7 | 8754 | max_turns×1 |
+| no_sandbox | 21/22 | 4.1 | 7709 | max_turns×1 |
+
+诚实解读：**关"收尾/交付物兜底"→ g01 回退 max_turns**，证明护栏贡献约 +4.5% 可靠性；
+**关压缩→通过率不变但 prompt token +4%、回合上升**，其价值在上下文效率而非通过率；
+**关沙箱对通过率中性**（安全属性≠任务能力，那 1 例是模型方差，非因果）。
+——这张表说明"每个机制值多少"，而不是只堆功能。
+
+**成本/时限护栏与失败归因**：`maxCostPerTask` / `deadlineMs`（可按任务覆盖）在超限时以
+`stop_reason=max_cost|deadline` 优雅早停，防止自主 agent 跑飞烧钱；`summary.json` 输出
+`failure_reasons` 直方图（max_turns / provider_error / missing_deliverable / wrong_answer /
+grader_mismatch），把"为什么失败"从口头变成数据。
+
+> 简历叙事：不是"我做了个能跑分的脚本"，而是"我构建了带独立判分、成本护栏与失败归因的
+> agent 评测闭环，用真实跑分定位并修复 4 个跨层 bug，并用消融实验量化了每个机制的贡献"。
 
 ## Roadmap
 
@@ -186,12 +207,13 @@ node src/cli.ts run --prompt "用 add 工具算 20+22"   # 模型可直接调用
 - [ ] DeepSeek cache-hit token 计费统计
 - [ ] 网页化实时面板（SSE 推送事件流替代事后回放）
 
-## 自检覆盖（75 项断言）
+## 自检覆盖（80 项断言）
 
-路径越界拒绝 ×4 · 工具执行/失败捕获 ×8 · token 估算与回合分组 ×3 ·
+路径越界拒绝 ×4 · 工具执行/失败捕获/Node 权限沙箱越界读写 ×10 · token 估算与回合分组 ×3 ·
 压缩有效性/锚点保留/失败兜底/无收益放弃 ×6 · checkpoint 读写与事件流 ×3 ·
-主循环完成/超限止损/断点续跑 ×7 · MCP 握手/列工具/调用/命名空间/失败降级/agent 经 MCP ×13 ·
-判分器 ×6 · 评测端到端 ×4
+主循环完成/超限止损/断点续跑/收尾轻推/交付物兜底 ×12 · OpenAI wire 序列化 ×4 ·
+成本/墙钟预算止损 ×2 · Provider 429 重试/400 不重试/MCP JSON-RPC 错误 ×3 ·
+MCP 握手/列工具/调用/命名空间/失败降级/agent 经 MCP ×13 · 判分器 ×8 · 评测端到端与消融聚合 ×8
 
 ```bash
 node src/cli.ts selftest   # 全绿即核心机制可信（含 MCP，全程离线）

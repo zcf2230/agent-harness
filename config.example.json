@@ -5,6 +5,8 @@
   "maxTokens": 4096,
   "maxTurns": 12,
   "contextBudgetTokens": 20000,
+  "maxCostPerTask": 0,
+  "deadlineMs": 0,
   "compactEnabled": true,
   "execTimeoutMs": 30000,
   "maxOutputChars": 20000,
