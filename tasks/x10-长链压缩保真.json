@@ -1,0 +1,52 @@
+{
+  "id": "x10",
+  "name": "长链压缩保真",
+  "category": "hard-context",
+  "difficulty": "hard",
+  "max_turns": 16,
+  "context_budget_tokens": 600,
+  "prompt": "工作区 entry.txt 描述了一条隐藏链条：每一跳文件包含一个 digit 和指向下一跳的 next 字段（next 为 END 表示结束）。从 entry.txt 指示的首个文件开始，逐跳读取直到结束，把沿途所有 digit 按访问顺序拼成一个整数写入 code.txt（内容只有该整数一行）。注意：本任务上下文预算很小，早期跳到的 digit 可能被自动压缩为摘要；若不确定某一位，请重新读取对应文件核对，确保顺序与每一位都正确。",
+  "workspace_files": [
+    {
+      "path": "entry.txt",
+      "content": "链条入口。请读取 8f2.txt 开始，每跳从文件中读出 digit 并按 next 指向的文件继续，直到 next 为 END。文件名不可预测，必须逐跳读取。"
+    },
+    {
+      "path": "8f2.txt",
+      "content": "digit = 7\nnext = a91.txt"
+    },
+    {
+      "path": "a91.txt",
+      "content": "digit = 3\nnext = 3kc.txt"
+    },
+    {
+      "path": "3kc.txt",
+      "content": "digit = 1\nnext = zz4.txt"
+    },
+    {
+      "path": "zz4.txt",
+      "content": "digit = 4\nnext = m7p.txt"
+    },
+    {
+      "path": "m7p.txt",
+      "content": "digit = 9\nnext = q2w.txt"
+    },
+    {
+      "path": "q2w.txt",
+      "content": "digit = 2\nnext = h8d.txt"
+    },
+    {
+      "path": "h8d.txt",
+      "content": "digit = 6\nnext = t5r.txt"
+    },
+    {
+      "path": "t5r.txt",
+      "content": "digit = 5\nnext = END"
+    }
+  ],
+  "grade": {
+    "type": "file_regex",
+    "path": "code.txt",
+    "pattern": "73149265"
+  }
+}

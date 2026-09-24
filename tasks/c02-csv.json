@@ -1,0 +1,18 @@
+{
+  "id": "c02",
+  "name": "CSV 统计",
+  "category": "code-js",
+  "prompt": "工作区中有 data.csv（表头为 name,score）。统计 score 列的平均值（四舍五入保留 2 位小数）和最大值，把结果写入 out.json，格式严格为 {\"avg\": 数值, \"max\": 数值}，值是 JSON 数字而不是字符串。",
+  "workspace_files": [
+    {
+      "path": "data.csv",
+      "content": "name,score\nAlice,70\nBob,90\nCarol,100\n"
+    }
+  ],
+  "grade": {
+    "type": "file_regex",
+    "path": "out.json",
+    "pattern": "\"avg\"\\s*:\\s*86\\.67[^0-9]*\"max\"\\s*:\\s*100",
+    "flags": "s"
+  }
+}

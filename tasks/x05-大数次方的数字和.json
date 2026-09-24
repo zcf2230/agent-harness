@@ -1,0 +1,12 @@
+{
+  "id": "x05",
+  "name": "大数次方的数字和",
+  "category": "hard-math",
+  "difficulty": "hard",
+  "max_turns": 8,
+  "prompt": "计算 2 的 100 次方（2^100）这个整数，然后求它十进制表示下所有数位之和。必须用 run_js 且使用 BigInt（普通 Number 会丢精度）。answer 中只包含最终的数位和整数。",
+  "grade": {
+    "type": "answer_number",
+    "expected": 115
+  }
+}

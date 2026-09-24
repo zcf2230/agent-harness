@@ -1,0 +1,12 @@
+{
+  "id": "t03",
+  "name": "非空行数合计",
+  "category": "toolflow",
+  "prompt": "统计工作区现有全部文本文件中非空行（去掉纯空白行）的总行数，在 finish 的 answer 中只报告这个总数。不要创建或修改任何文件。",
+  "workspace_files": [
+    { "path": "docs/readme.md", "content": "# 部署手册\n\n## 步骤一\n安装依赖\n检查端口" },
+    { "path": "docs/guide.md", "content": "# 使用指南\n## 入门\n打开页面\n输入账号\n点击登录\n## 进阶\n配置代理\n查看日志" },
+    { "path": "src/main.mjs", "content": "import http from 'node:http';\nconst server = http.createServer((req, res) => {\n  res.writeHead(200);\n  res.end('ok');\n});\nserver.listen(0, () => {\n  console.log('listening');\n});\nprocess.on('SIGTERM', () => {\n  server.close();\n});\nconst tag = 'main';\nexport default tag;" }
+  ],
+  "grade": { "type": "answer_number", "expected": 25 }
+}

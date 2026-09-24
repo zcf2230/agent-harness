@@ -1,0 +1,11 @@
+{
+  "id": "c01",
+  "name": "FizzBuzz 输出",
+  "category": "code-js",
+  "prompt": "在工作区根目录创建 solution.mjs：运行时依次输出 1 到 30 的 FizzBuzz 序列，每行一个值：能被 3 整除输出 Fizz，能被 5 整除输出 Buzz，同时能被 3 和 5 整除输出 FizzBuzz，其余输出数字本身。先用 run_js 验证，再创建该文件。",
+  "grade": {
+    "type": "run_test",
+    "command": "node solution.mjs",
+    "stdout_regex": "^1\\n2\\nFizz\\n4\\nBuzz\\nFizz\\n7\\n8\\nFizz\\nBuzz\\n11\\nFizz\\n13\\n14\\nFizzBuzz\\n16\\n17\\nFizz\\n19\\nBuzz\\nFizz\\n22\\n23\\nFizz\\nBuzz\\n26\\nFizz\\n28\\n29\\nFizzBuzz"
+  }
+}

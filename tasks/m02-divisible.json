@@ -1,0 +1,7 @@
+{
+  "id": "m02",
+  "name": "整除计数",
+  "category": "math",
+  "prompt": "1 到 1000（含）之间，能被 3 整除或能被 5 整除的整数一共有多少个？用 run_js 验证后提交，answer 中只包含最终整数。",
+  "grade": { "type": "answer_number", "expected": 467 }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "c03",
+  "name": "越界缺陷修复",
+  "category": "code-js",
+  "prompt": "工作区里的 solution.mjs 有缺陷，test.mjs 是不许修改的验收测试。请阅读两个文件，修复 solution.mjs 直到运行 node test.mjs 全部通过。",
+  "workspace_files": [
+    {
+      "path": "solution.mjs",
+      "content": "export function sumTo(n) {\n  let s = 0;\n  for (let i = 1; i < n; i++) {\n    s += i;\n  }\n  return s;\n}\n"
+    },
+    {
+      "path": "test.mjs",
+      "content": "import { sumTo } from './solution.mjs';\nimport assert from 'node:assert';\nassert.strictEqual(sumTo(1), 1, 'n=1 应为 1');\nassert.strictEqual(sumTo(10), 55, 'n=10 应为 55');\nassert.strictEqual(sumTo(100), 5050, 'n=100 应为 5050');\nconsole.log('ALL TESTS PASSED');\n"
+    }
+  ],
+  "grade": { "type": "run_test", "command": "node test.mjs" }
+}

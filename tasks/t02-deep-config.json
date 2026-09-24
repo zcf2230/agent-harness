@@ -1,0 +1,13 @@
+{
+  "id": "t02",
+  "name": "深层配置检索",
+  "category": "toolflow",
+  "prompt": "阅读 config/app.json，找出 db.pool.max_conn 的值，写入 answer.json，格式严格为 {\"value\": 数字}，并在 finish 答案中重复该数字。",
+  "workspace_files": [
+    {
+      "path": "config/app.json",
+      "content": "{\n  \"app\": \"order-service\",\n  \"db\": { \"host\": \"127.0.0.1\", \"pool\": { \"max_conn\": 8472, \"timeout_ms\": 3000 } },\n  \"cache\": { \"ttl\": 300, \"backend\": \"redis\" },\n  \"features\": [\"rate-limit\", \"trace\"]\n}"
+    }
+  ],
+  "grade": { "type": "file_regex", "path": "answer.json", "pattern": "\"value\"\\s*:\\s*8472" }
+}

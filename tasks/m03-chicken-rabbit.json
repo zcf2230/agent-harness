@@ -1,0 +1,7 @@
+{
+  "id": "m03",
+  "name": "鸡兔同笼",
+  "category": "math",
+  "prompt": "笼子里有若干只鸡和兔，从上面数有 35 个头，从下面数有 94 只脚。问鸡有多少只？用 run_js 验证后提交，answer 中只包含最终整数。",
+  "grade": { "type": "answer_number", "expected": 23 }
+}

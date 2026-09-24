@@ -1,0 +1,7 @@
+{
+  "id": "d01",
+  "name": "离线演示",
+  "category": "demo",
+  "prompt": "这是离线演示任务：不要使用任何其他工具，直接调用 finish 提交答案 MOCK。",
+  "grade": { "type": "answer_regex", "pattern": "^MOCK$" }
+}

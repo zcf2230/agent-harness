@@ -1,0 +1,21 @@
+{
+  "baseUrl": "https://api.deepseek.com/v1",
+  "model": "deepseek-chat",
+  "temperature": 0.2,
+  "maxTokens": 4096,
+  "maxTurns": 12,
+  "contextBudgetTokens": 20000,
+  "compactEnabled": true,
+  "execTimeoutMs": 30000,
+  "maxOutputChars": 20000,
+  "pythonCommand": "C:\\Users\\34264\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "priceInputPerMTok": 1,
+  "priceOutputPerMTok": 2,
+  "currency": "¥",
+  "mcpServers": {
+    "calc": {
+      "command": "node",
+      "args": ["src/mcp/test-server.ts"]
+    }
+  }
+}

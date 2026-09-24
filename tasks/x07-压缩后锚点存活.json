@@ -1,0 +1,19 @@
+{
+  "id": "x07",
+  "name": "压缩后锚点存活",
+  "category": "hard-context",
+  "difficulty": "hard",
+  "max_turns": 12,
+  "context_budget_tokens": 700,
+  "prompt": "data/registry.txt 有 60 行配置。请用 read_file 每次读取 10 行（用 offset/limit 分块），连续读完全文件；读完后报告其中 target_secret 的值。注意：本任务的上下文预算很小，早期读到的内容可能被自动压缩成摘要，因此务必在 finish 的 answer 中给出 target_secret 的整数原值。",
+  "workspace_files": [
+    {
+      "path": "data/registry.txt",
+      "content": "entry01 = 000000104729#padxxxxxxxx\nentry02 = 000000209458#padxxxxxxxx\nentry03 = 000000314187#padxxxxxxxx\nentry04 = 000000418916#padxxxxxxxx\ntarget_secret = 70713\nentry06 = 000000628374#padxxxxxxxx\nentry07 = 000000733103#padxxxxxxxx\nentry08 = 000000837832#padxxxxxxxx\nentry09 = 000000942561#padxxxxxxxx\nentry10 = 000001047290#padxxxxxxxx\nentry11 = 000001152019#padxxxxxxxx\nentry12 = 000001256748#padxxxxxxxx\nentry13 = 000001361477#padxxxxxxxx\nentry14 = 000001466206#padxxxxxxxx\nentry15 = 000001570935#padxxxxxxxx\nentry16 = 000001675664#padxxxxxxxx\nentry17 = 000001780393#padxxxxxxxx\nentry18 = 000001885122#padxxxxxxxx\nentry19 = 000001989851#padxxxxxxxx\nentry20 = 000002094580#padxxxxxxxx\nentry21 = 000002199309#padxxxxxxxx\nentry22 = 000002304038#padxxxxxxxx\nentry23 = 000002408767#padxxxxxxxx\nentry24 = 000002513496#padxxxxxxxx\nentry25 = 000002618225#padxxxxxxxx\nentry26 = 000002722954#padxxxxxxxx\nentry27 = 000002827683#padxxxxxxxx\nentry28 = 000002932412#padxxxxxxxx\nentry29 = 000003037141#padxxxxxxxx\nentry30 = 000003141870#padxxxxxxxx\nentry31 = 000003246599#padxxxxxxxx\nentry32 = 000003351328#padxxxxxxxx\nentry33 = 000003456057#padxxxxxxxx\nentry34 = 000003560786#padxxxxxxxx\nentry35 = 000003665515#padxxxxxxxx\nentry36 = 000003770244#padxxxxxxxx\nentry37 = 000003874973#padxxxxxxxx\nentry38 = 000003979702#padxxxxxxxx\nentry39 = 000004084431#padxxxxxxxx\nentry40 = 000004189160#padxxxxxxxx\nentry41 = 000004293889#padxxxxxxxx\nentry42 = 000004398618#padxxxxxxxx\nentry43 = 000004503347#padxxxxxxxx\nentry44 = 000004608076#padxxxxxxxx\nentry45 = 000004712805#padxxxxxxxx\nentry46 = 000004817534#padxxxxxxxx\nentry47 = 000004922263#padxxxxxxxx\nentry48 = 000005026992#padxxxxxxxx\nentry49 = 000005131721#padxxxxxxxx\nentry50 = 000005236450#padxxxxxxxx\nentry51 = 000005341179#padxxxxxxxx\nentry52 = 000005445908#padxxxxxxxx\nentry53 = 000005550637#padxxxxxxxx\nentry54 = 000005655366#padxxxxxxxx\nentry55 = 000005760095#padxxxxxxxx\nentry56 = 000005864824#padxxxxxxxx\nentry57 = 000005969553#padxxxxxxxx\nentry58 = 000006074282#padxxxxxxxx\nentry59 = 000006179011#padxxxxxxxx\nentry60 = 000006283740#padxxxxxxxx"
+    }
+  ],
+  "grade": {
+    "type": "answer_number",
+    "expected": 70713
+  }
+}

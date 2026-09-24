@@ -1,0 +1,12 @@
+{
+  "id": "x04",
+  "name": "平方和阈值搜索",
+  "category": "hard-reasoning",
+  "difficulty": "hard",
+  "max_turns": 8,
+  "prompt": "求满足 1² + 2² + ... + n² > 100000 的最小正整数 n。必须用 run_js 迭代计算，禁止估算。finish 的 answer 中只包含这个整数 n。",
+  "grade": {
+    "type": "answer_number",
+    "expected": 67
+  }
+}

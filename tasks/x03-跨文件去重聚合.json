@@ -1,0 +1,24 @@
+{
+  "id": "x03",
+  "name": "跨文件去重聚合",
+  "category": "hard-toolflow",
+  "difficulty": "hard",
+  "max_turns": 8,
+  "prompt": "data/a.csv 与 data/b.csv 均为 id,score 两列（含表头）。规则：score 为空或非数字的行跳过；同一 id 只计一次，若多次出现取最大 score。统计去重后的 id 个数 unique、所有唯一 id 的 score 之和 total、以及最大单个 score，写入 agg.json，格式严格为 {\"unique\": 整数, \"total\": 整数, \"max\": 整数}。",
+  "workspace_files": [
+    {
+      "path": "data/a.csv",
+      "content": "id,score\n1,10\n2,20\n3,30\n4,\n"
+    },
+    {
+      "path": "data/b.csv",
+      "content": "id,score\n2,25\n5,50\n5,40\n6,\n"
+    }
+  ],
+  "grade": {
+    "type": "file_regex",
+    "path": "agg.json",
+    "pattern": "\"unique\"\\s*:\\s*4[^0-9]*\"total\"\\s*:\\s*115[^0-9]*\"max\"\\s*:\\s*50",
+    "flags": "s"
+  }
+}

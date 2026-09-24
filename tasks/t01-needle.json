@@ -1,0 +1,13 @@
+{
+  "id": "t01",
+  "name": "定位隐藏标记",
+  "category": "toolflow",
+  "prompt": "工作区中恰好有一个文件的正文包含字符串 NEEDLE-8F2K9X。找到它，并把该文件的相对路径（单行、无其他内容）写入 found.txt。",
+  "workspace_files": [
+    { "path": "notes/a.txt", "content": "今天讨论了排期，下周联调。" },
+    { "path": "src/utils/parser.mjs", "content": "export function parse(line) {\n  return line.trim();\n}" },
+    { "path": "src/deep/target.mjs", "content": "// 定位标记 NEEDLE-8F2K9X\nexport const value = 42;" },
+    { "path": "data/log.txt", "content": "2026-09-01 启动完成\n2026-09-01 心跳正常" }
+  ],
+  "grade": { "type": "file_regex", "path": "found.txt", "pattern": "src/deep/target\\.mjs" }
+}

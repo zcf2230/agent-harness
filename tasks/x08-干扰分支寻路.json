@@ -1,0 +1,39 @@
+{
+  "id": "x08",
+  "name": "干扰分支寻路",
+  "category": "hard-toolflow",
+  "difficulty": "hard",
+  "max_turns": 8,
+  "prompt": "工作区有一条带干扰项的信息链。从 start.txt 开始：routes.json 给出 left 和 right 两个候选分支文件，并附带一条选择规则。你必须按规则判断该走哪个分支（另一个是干扰项），进入正确分支后按其 next 指引读取最终文件，把其中给出的最终数值单独写入 found.txt（内容只有该数字一行）。选错分支会得到错误答案。",
+  "workspace_files": [
+    {
+      "path": "start.txt",
+      "content": "起点。请读取 routes.json 获取两个候选分支与选择规则。"
+    },
+    {
+      "path": "routes.json",
+      "content": "{\n  \"left\": \"branch/left.json\",\n  \"right\": \"branch/right.json\",\n  \"rule\": \"分别读取 left.json 与 right.json，选择其中 value 为偶数的那个分支继续；忽略另一个\"\n}"
+    },
+    {
+      "path": "branch/left.json",
+      "content": "{\n  \"value\": 77,\n  \"next\": \"data/left_next.txt\"\n}"
+    },
+    {
+      "path": "branch/right.json",
+      "content": "{\n  \"value\": 42,\n  \"next\": \"data/right_next.txt\"\n}"
+    },
+    {
+      "path": "data/left_next.txt",
+      "content": "（干扰分支）最终值 = 7700"
+    },
+    {
+      "path": "data/right_next.txt",
+      "content": "（正确分支）最终值 = 42 * 100 + 5 = 4205"
+    }
+  ],
+  "grade": {
+    "type": "file_regex",
+    "path": "found.txt",
+    "pattern": "4205"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "m01",
+  "name": "复利终值",
+  "category": "math",
+  "prompt": "本金 1000 元，月利率 1%，按月复利计息（即每月末把利息滚入本金），存 12 个月。到期本息合计是多少元？结果四舍五入保留 2 位小数。必须用 run_js 精确计算后再提交，finish 的 answer 中只包含最终数字（单位：元）。",
+  "grade": { "type": "answer_number", "expected": 1126.83, "tolerance": 0.05 }
+}

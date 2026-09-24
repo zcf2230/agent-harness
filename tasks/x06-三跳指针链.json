@@ -1,0 +1,27 @@
+{
+  "id": "x06",
+  "name": "三跳指针链",
+  "category": "hard-toolflow",
+  "difficulty": "hard",
+  "max_turns": 6,
+  "prompt": "工作区有一条跨文件的信息链。从 clue.txt 开始，按其中的指引依次读取下一个文件，直到找到名为 final 的数值。把这个数值单独写入 found.txt（内容只有该数字一行）。",
+  "workspace_files": [
+    {
+      "path": "clue.txt",
+      "content": "这是起点。下一步请读取 pointer.json，它用 target 字段指向真正的文件。"
+    },
+    {
+      "path": "pointer.json",
+      "content": "{\n  \"target\": \"meta/values.json\",\n  \"hint\": \"答案在 values 数组里 key 为 final 的那一项\"\n}"
+    },
+    {
+      "path": "meta/values.json",
+      "content": "{\n  \"values\": [\n    { \"key\": \"alpha\", \"n\": 12 },\n    { \"key\": \"final\", \"n\": 31337 },\n    { \"key\": \"beta\", \"n\": 999 }\n  ]\n}"
+    }
+  ],
+  "grade": {
+    "type": "file_regex",
+    "path": "found.txt",
+    "pattern": "31337"
+  }
+}

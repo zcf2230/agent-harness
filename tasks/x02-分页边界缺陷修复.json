@@ -1,0 +1,22 @@
+{
+  "id": "x02",
+  "name": "分页边界缺陷修复",
+  "category": "hard-code",
+  "difficulty": "hard",
+  "max_turns": 8,
+  "prompt": "工作区的 paginate.mjs 导出 pageInfo(total, size, page)，返回 {pages, offset, hasNext}，语义为：pages=总页数（total<=0 时为 0）；offset=该页起始下标，当 page 超过最后一页时要钳制到最后一页的起始下标；hasNext=是否还有下一页。它含有多个边界缺陷。test.mjs 是不许修改的验收测试，请修复 paginate.mjs 直到 node test.mjs 全部通过。",
+  "workspace_files": [
+    {
+      "path": "paginate.mjs",
+      "content": "export function pageInfo(total, size, page) {\n  const pages = Math.floor(total / size);\n  const offset = (page - 1) * size;\n  const hasNext = page <= pages;\n  return { pages, offset, hasNext };\n}"
+    },
+    {
+      "path": "test.mjs",
+      "content": "import { pageInfo } from './paginate.mjs';\nimport assert from 'node:assert';\nconst cases = [\n  { total: 0, size: 10, page: 1, pages: 0, offset: 0, hasNext: false },\n  { total: 25, size: 10, page: 1, pages: 3, offset: 0, hasNext: true },\n  { total: 25, size: 10, page: 3, pages: 3, offset: 20, hasNext: false },\n  { total: 20, size: 10, page: 2, pages: 2, offset: 10, hasNext: false },\n  { total: 20, size: 10, page: 3, pages: 2, offset: 10, hasNext: false },\n  { total: 5, size: 10, page: 1, pages: 1, offset: 0, hasNext: false },\n];\nfor (const c of cases) {\n  const r = pageInfo(c.total, c.size, c.page);\n  assert.deepStrictEqual(r, { pages: c.pages, offset: c.offset, hasNext: c.hasNext }, `total=${c.total} size=${c.size} page=${c.page} → ${JSON.stringify(r)}`);\n}\nconsole.log('ALL TESTS PASSED');"
+    }
+  ],
+  "grade": {
+    "type": "run_test",
+    "command": "node test.mjs"
+  }
+}

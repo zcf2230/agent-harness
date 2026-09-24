@@ -1,0 +1,7 @@
+{
+  "id": "p01",
+  "name": "素数计数（Python）",
+  "category": "code-py",
+  "prompt": "在工作区创建 solution.py：运行它时只输出一个整数——不超过 100 的素数个数。先写代码再运行验证。",
+  "grade": { "type": "run_test", "command": "python solution.py", "stdout_regex": "^\\s*25\\s*$" }
+}

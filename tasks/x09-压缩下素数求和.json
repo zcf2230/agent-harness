@@ -1,0 +1,63 @@
+{
+  "id": "x09",
+  "name": "压缩下素数求和",
+  "category": "hard-context",
+  "difficulty": "hard",
+  "max_turns": 16,
+  "context_budget_tokens": 900,
+  "prompt": "data/ 目录下有 12 个文件 n01.txt 到 n12.txt，每个文件里是一个整数。请逐个读取全部 12 个文件，找出其中的素数并求和。本任务上下文预算很小，早期读取的内容可能被自动压缩为摘要——为确保准确，你应在读取过程中自行记录，必要时可重新读取。finish 的 answer 中只包含这些素数的总和整数。",
+  "workspace_files": [
+    {
+      "path": "data/n01.txt",
+      "content": "2"
+    },
+    {
+      "path": "data/n02.txt",
+      "content": "15"
+    },
+    {
+      "path": "data/n03.txt",
+      "content": "23"
+    },
+    {
+      "path": "data/n04.txt",
+      "content": "29"
+    },
+    {
+      "path": "data/n05.txt",
+      "content": "40"
+    },
+    {
+      "path": "data/n06.txt",
+      "content": "53"
+    },
+    {
+      "path": "data/n07.txt",
+      "content": "57"
+    },
+    {
+      "path": "data/n08.txt",
+      "content": "59"
+    },
+    {
+      "path": "data/n09.txt",
+      "content": "77"
+    },
+    {
+      "path": "data/n10.txt",
+      "content": "83"
+    },
+    {
+      "path": "data/n11.txt",
+      "content": "91"
+    },
+    {
+      "path": "data/n12.txt",
+      "content": "97"
+    }
+  ],
+  "grade": {
+    "type": "answer_number",
+    "expected": 346
+  }
+}
