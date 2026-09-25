@@ -61,12 +61,13 @@ export interface RunOptions {
   log: RunLog;
   mcp?: McpBridge | null;
   requiredFiles?: string[];
+  protectedPaths?: Set<string>;
   print?: (s: string) => void;
 }
 
 export async function runAgent(o: RunOptions): Promise<RunState> {
   const { state, log, cfg } = o;
-  const toolsCtx = { workspace: o.workspace, cfg };
+  const toolsCtx = { workspace: o.workspace, cfg, protectedPaths: o.protectedPaths };
   const mcp = o.mcp ?? null;
   const specs = mcp && mcp.specs.length > 0 ? TOOL_SPECS.concat(mcp.specs) : TOOL_SPECS;
   state.status = 'running';

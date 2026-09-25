@@ -40,7 +40,7 @@ async function testSandbox(): Promise<void> {
   section('沙箱与路径边界');
   const ws = path.join(tmpRoot, 'ws1');
   fs.mkdirSync(ws, { recursive: true });
-  check('相对路径合法', safeResolve(ws, 'a/b.txt').startsWith(fs.realpathSync ? path.resolve(ws) : ws));
+  check('相对路径合法', safeResolve(ws, 'a/b.txt').startsWith(path.resolve(ws)));
   let escaped = false;
   try {
     safeResolve(ws, '../outside.txt');
@@ -305,6 +305,18 @@ async function testSecurity(): Promise<void> {
   setupWorkspace(task, gws);
   const graded = await gradeTask(task, gws, 'done', cfg);
   check('判分器执行模型文件时也在沙箱内（越界写被拒）', !graded.pass && !fs.existsSync(outside), graded.detail.slice(0, 90));
+
+  const protTask: TaskDef = {
+    id: 'prot', name: '保护', category: 'demo', prompt: 'x',
+    workspace_files: [{ path: 'test.mjs', content: "// grader\n", protected: true }, { path: 'data.txt', content: 'x' }],
+  };
+  const pws = path.join(tmpRoot, 'prot-ws');
+  const pset = setupWorkspace(protTask, pws);
+  const pctx = { workspace: pws, cfg, protectedPaths: pset };
+  const tamper = await executeTool(pctx, 'write_file', JSON.stringify({ path: 'test.mjs', content: 'trivially pass' }));
+  check('模型不能覆写受保护验收文件', !tamper.ok && tamper.output.includes('受保护'), tamper.output.slice(0, 60));
+  const okWrite = await executeTool(pctx, 'write_file', JSON.stringify({ path: 'answer.txt', content: 'ok' }));
+  check('非保护文件仍可写', okWrite.ok, okWrite.output.slice(0, 40));
 }
 
 async function testGraders(): Promise<void> {

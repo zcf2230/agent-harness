@@ -8,6 +8,7 @@
   "workspace_files": [
     {
       "path": "verify.mjs",
+      "protected": true,
       "content": "import fs from 'node:fs';\nlet d;\ntry { d = JSON.parse(fs.readFileSync('deploy.json', 'utf8')); }\ncatch (e) { console.log('deploy.json 无法解析: ' + e.message); process.exit(1); }\nconst errs = [];\nif (d.region !== 'ap-east') errs.push('region 必须为字符串 ap-east');\nif (!Number.isInteger(d.replicas) || d.replicas < 3 || d.replicas > 5) errs.push('replicas 必须是 3..5 的整数');\nif (!Array.isArray(d.ports) || !d.ports.includes(8080) || !d.ports.includes(9090)) errs.push('ports 数组必须同时包含 8080 与 9090');\nelse if (new Set(d.ports).size !== d.ports.length) errs.push('ports 不得含重复值');\nif (d.tls === true && (typeof d.cert_path !== 'string' || d.cert_path.length === 0)) errs.push('当 tls 为 true 时 cert_path 必须为非空字符串');\nconst envKeys = d.env && typeof d.env === 'object' && !Array.isArray(d.env) ? Object.keys(d.env) : [];\nif (envKeys.length !== 3) errs.push('env 对象必须恰好包含 3 个键，当前 ' + envKeys.length);\nif (errs.length) { console.log('未通过约束:\\n- ' + errs.join('\\n- ')); process.exit(1); }\nconsole.log('ALL CONSTRAINTS SATISFIED');"
     }
   ],

@@ -21,15 +21,18 @@ function extractNumbers(s: string): number[] {
   return out;
 }
 
+export type FailReason = 'none' | 'missing_deliverable' | 'wrong_answer' | 'grader_mismatch' | 'test_failed';
+
 export async function gradeTask(
   task: TaskDef,
   workspace: string,
   answer: string | null,
   cfg: HarnessConfig
-): Promise<{ pass: boolean; detail: string }> {
+): Promise<{ pass: boolean; reason: FailReason; detail: string }> {
   const rule: GradeRule | undefined = task.grade;
   if (!rule) {
-    return { pass: answer != null && answer.length > 0, detail: '无判分规则，按是否提交答案计' };
+    const pass = answer != null && answer.length > 0;
+    return { pass, reason: pass ? 'none' : 'wrong_answer', detail: '无判分规则，按是否提交答案计' };
   }
   try {
     switch (rule.type) {
@@ -37,16 +40,17 @@ export async function gradeTask(
         const re = new RegExp(rule.pattern, rule.flags ?? '');
         const s = answer ?? '';
         const pass = re.test(s);
-        return { pass, detail: `answer_regex ${rule.pattern} → ${pass ? '命中' : '未命中'}` };
+        return { pass, reason: pass ? 'none' : 'wrong_answer', detail: `answer_regex ${rule.pattern} → ${pass ? '命中' : '未命中'}` };
       }
       case 'answer_number': {
         const nums = extractNumbers(answer ?? '');
-        if (nums.length === 0) return { pass: false, detail: '答案中提取不到数字' };
+        if (nums.length === 0) return { pass: false, reason: 'wrong_answer', detail: '答案中提取不到数字' };
         const tol = rule.tolerance ?? 1e-6;
         const hit = nums.find((n) => Math.abs(n - rule.expected) <= tol);
         const pass = hit != null;
         return {
           pass,
+          reason: pass ? 'none' : 'wrong_answer',
           detail: pass
             ? `答案含正确值 ${hit}（期望 ${rule.expected}±${tol}）`
             : `候选 [${nums.join(', ')}]，无一匹配期望 ${rule.expected}±${tol}`,
@@ -54,11 +58,11 @@ export async function gradeTask(
       }
       case 'file_regex': {
         const abs = safeResolve(workspace, rule.path);
-        if (!fs.existsSync(abs)) return { pass: false, detail: `文件不存在: ${rule.path}` };
+        if (!fs.existsSync(abs)) return { pass: false, reason: 'missing_deliverable', detail: `文件不存在: ${rule.path}` };
         const text = fs.readFileSync(abs, 'utf8');
         const re = new RegExp(rule.pattern, rule.flags ?? 's');
         const pass = re.test(text);
-        return { pass, detail: `file_regex ${rule.path} ${rule.pattern} → ${pass ? '命中' : '未命中'}` };
+        return { pass, reason: pass ? 'none' : 'grader_mismatch', detail: `file_regex ${rule.path} ${rule.pattern} → ${pass ? '命中' : '未命中'}` };
       }
       case 'run_test': {
         const parts = rule.command.split(/\s+/).filter(Boolean);
@@ -74,21 +78,22 @@ export async function gradeTask(
         if (r.code !== 0) {
           return {
             pass: false,
+            reason: 'test_failed',
             detail: `判分命令 ${rule.command} 退出码 ${r.code}${r.timedOut ? '（超时）' : ''}: ${(r.stderr || r.stdout).slice(0, 300)}`,
           };
         }
         if (rule.stdout_regex) {
           const re = new RegExp(rule.stdout_regex, 'm');
           const pass = re.test(r.stdout);
-          return { pass, detail: `命令通过，stdout_regex ${rule.stdout_regex} → ${pass ? '命中' : '未命中'}` };
+          return { pass, reason: pass ? 'none' : 'grader_mismatch', detail: `命令通过，stdout_regex ${rule.stdout_regex} → ${pass ? '命中' : '未命中'}` };
         }
-        return { pass: true, detail: `命令 ${rule.command} 退出码 0` };
+        return { pass: true, reason: 'none', detail: `命令 ${rule.command} 退出码 0` };
       }
       default:
-        return { pass: false, detail: '未知判分类型' };
+        return { pass: false, reason: 'grader_mismatch', detail: '未知判分类型' };
     }
   } catch (e: any) {
-    return { pass: false, detail: `判分异常: ${e?.message ?? e}` };
+    return { pass: false, reason: 'grader_mismatch', detail: `判分异常: ${e?.message ?? e}` };
   }
 }
 

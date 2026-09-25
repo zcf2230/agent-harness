@@ -37,6 +37,7 @@ export interface ChatProvider {
 export interface WorkspaceFile {
   path: string;
   content: string;
+  protected?: boolean;
 }
 
 export interface McpServerConfig {

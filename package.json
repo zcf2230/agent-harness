@@ -9,8 +9,13 @@
   "scripts": {
     "cli": "node src/cli.ts",
     "selftest": "node src/selftest.ts",
+    "typecheck": "tsc --noEmit",
     "tasks": "node src/cli.ts tasks",
     "eval": "node src/cli.ts eval --all"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
   },
   "license": "MIT"
 }

@@ -10,6 +10,7 @@
     },
     {
       "path": "test.mjs",
+      "protected": true,
       "content": "import { sumTo } from './solution.mjs';\nimport assert from 'node:assert';\nassert.strictEqual(sumTo(1), 1, 'n=1 应为 1');\nassert.strictEqual(sumTo(10), 55, 'n=10 应为 55');\nassert.strictEqual(sumTo(100), 5050, 'n=100 应为 5050');\nconsole.log('ALL TESTS PASSED');\n"
     }
   ],

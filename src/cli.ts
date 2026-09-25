@@ -234,8 +234,9 @@ async function main() {
       console.error('没有匹配的任务（--all / --task id,id / --category 名称）');
       process.exit(2);
     }
+    const runs = typeof opts.runs === 'string' ? parseInt(opts.runs, 10) || 1 : 1;
     if (!opts.mock && !opts.yes) {
-      console.log(`消融将跑 4 种配置 × ${selected.length} 任务 = ${4 * selected.length} 次真实调用。用 --yes 跳过，或 --mock 离线演示。`);
+      console.log(`消融将跑 ${4} 配置 × ${selected.length} 任务 × ${runs} 轮 = ${4 * selected.length * runs} 次真实调用。用 --yes 跳过，或 --mock 离线演示。`);
       process.exit(3);
     }
     const { runAblation } = await import('./eval/runner.ts');
@@ -254,6 +255,7 @@ async function main() {
         cfg,
         concurrency,
         configs,
+        runs,
       });
     } finally {
       await mcp.close();

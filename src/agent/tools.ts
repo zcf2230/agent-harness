@@ -8,6 +8,7 @@ import { relPath, runScript, safeResolve, nodeSandboxArgs } from './sandbox.ts';
 export interface ToolContext {
   workspace: string;
   cfg: HarnessConfig;
+  protectedPaths?: Set<string>;
 }
 
 export interface ToolResult {
@@ -159,6 +160,9 @@ export async function executeTool(
       }
       case 'write_file': {
         const abs = safeResolve(ctx.workspace, args.path);
+        if (ctx.protectedPaths && ctx.protectedPaths.has(relPath(ctx.workspace, abs))) {
+          return done(false, `错误: ${args.path} 是受保护的验收文件，模型不可修改（判分独立性）。`);
+        }
         fs.mkdirSync(path.dirname(abs), { recursive: true });
         const content = String(args.content ?? '');
         fs.writeFileSync(abs, content, 'utf8');

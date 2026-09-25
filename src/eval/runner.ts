@@ -29,13 +29,23 @@ export interface TaskRecord {
   run_dir: string;
 }
 
-export function setupWorkspace(task: TaskDef, workspace: string): void {
+export function setupWorkspace(task: TaskDef, workspace: string): Set<string> {
   fs.mkdirSync(workspace, { recursive: true });
+  const protectedPaths = new Set<string>();
   for (const f of task.workspace_files ?? []) {
     const abs = safeResolve(workspace, f.path);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, f.content, 'utf8');
+    if (f.protected) {
+      protectedPaths.add(f.path);
+      try {
+        fs.chmodSync(abs, 0o444);
+      } catch {
+        /* Windows 上 chmod 有限，write_file 层已拒绝覆写 */
+      }
+    }
   }
+  return protectedPaths;
 }
 
 export function createRunDir(cfg: HarnessConfig, batchDir: string, taskId: string, taskName: string): string {
@@ -55,13 +65,14 @@ export async function executeTask(opts: {
   const workspace = path.join(opts.runDir, 'workspace');
   const log = new RunLog(opts.runDir);
   let state: RunState;
+  let protectedSet: Set<string> | undefined;
   const startAt = Date.now();
   if (opts.resume && fs.existsSync(path.join(opts.runDir, 'state.json'))) {
     state = RunLog.loadState(opts.runDir);
     log.event('resume', { from: state.started_at, turn: state.turn });
     opts.print?.(`↺ 从回合 ${state.turn} 续跑`);
   } else {
-    setupWorkspace(task, workspace);
+    const protectedPaths = setupWorkspace(task, workspace);
     state = newRunState(task, cfg);
     log.event('run_start', {
       task_id: task.id,
@@ -70,10 +81,12 @@ export async function executeTask(opts: {
       model: cfg.model,
       prompt: task.prompt,
       workspace,
+      protected: [...protectedPaths],
     });
     log.saveState(state);
+    protectedSet = protectedPaths;
   }
-  state = await runAgent({ provider: opts.provider, cfg, state, workspace, log, mcp: opts.mcp ?? null, requiredFiles: requiredOutputFiles(task), print: opts.print });
+  state = await runAgent({ provider: opts.provider, cfg, state, workspace, log, mcp: opts.mcp ?? null, requiredFiles: requiredOutputFiles(task), protectedPaths: protectedSet, print: opts.print });
   const graded = await gradeTask(task, workspace, state.answer, cfg);
   const duration_ms = Date.now() - startAt;
   const record: TaskRecord = {
@@ -83,7 +96,7 @@ export async function executeTask(opts: {
     difficulty: task.difficulty ?? 'easy',
     pass: graded.pass,
     status: state.status,
-    reason: graded.pass ? null : classifyFailure(state.status, graded.detail),
+    reason: graded.pass ? null : classifyFailure(state.status, graded.reason),
     detail: graded.detail,
     turns: state.turn,
     compactions: state.compactions,
@@ -121,12 +134,21 @@ export interface AblationConfig {
 export interface AblationRow {
   name: string;
   note: string;
-  passed: number;
-  total: number;
-  pass_rate: number;
+  runs: number;
+  mean_pass_rate: number;
+  median_pass_rate: number;
+  min_pass_rate: number;
   mean_turns: number;
   mean_prompt_tokens: number;
   mean_cost: number;
+  flaky_tasks: string[];
+}
+
+function median(xs: number[]): number {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
 export async function runAblation(o: {
@@ -135,40 +157,56 @@ export async function runAblation(o: {
   cfg: HarnessConfig;
   concurrency: number;
   configs: AblationConfig[];
+  runs?: number;
   batchDir?: string;
 }): Promise<{ dir: string; rows: AblationRow[] }> {
+  const runs = Math.max(1, o.runs ?? 1);
   const dir = o.batchDir ?? path.join(o.cfg.runsDir, `ablation-${batchTs()}`);
   fs.mkdirSync(dir, { recursive: true });
   const rows: AblationRow[] = [];
   for (const c of o.configs) {
-    process.stdout.write(`\n===== 消融配置：${c.name}（${c.note}）=====\n`);
     const cfg: HarnessConfig = { ...o.cfg, ...c.override };
-    const { records } = await evalSuite({
-      tasks: o.tasks,
-      providerFactory: o.providerFactory,
-      cfg,
-      concurrency: o.concurrency,
-      batchDir: path.join(dir, c.name),
-      quiet: true,
-    });
-    const passed = records.filter((r) => r.pass).length;
+    const allRecs: TaskRecord[][] = [];
+    for (let r = 0; r < runs; r++) {
+      process.stdout.write(`\n===== 消融：${c.name} 第 ${r + 1}/${runs} 轮 =====\n`);
+      const { records } = await evalSuite({
+        tasks: o.tasks,
+        providerFactory: o.providerFactory,
+        cfg,
+        concurrency: o.concurrency,
+        batchDir: path.join(dir, c.name, `run-${r + 1}`),
+        quiet: true,
+      });
+      allRecs.push(records);
+    }
+    const perRunRates = allRecs.map((recs) => (recs.filter((x) => x.pass).length / Math.max(1, recs.length)) * 100);
+    const flat = allRecs.flat();
+    const byTask = new Map<string, boolean[]>();
+    for (const rec of flat) {
+      const arr = byTask.get(rec.task_id) ?? [];
+      arr.push(rec.pass);
+      byTask.set(rec.task_id, arr);
+    }
+    const flaky_tasks = [...byTask.entries()].filter(([, ps]) => ps.some(Boolean) && !ps.every(Boolean)).map(([id]) => id);
     rows.push({
       name: c.name,
       note: c.note,
-      passed,
-      total: records.length,
-      pass_rate: Math.round((passed / Math.max(1, records.length)) * 1000) / 10,
-      mean_turns: Math.round(mean(records.map((r) => r.turns)) * 10) / 10,
-      mean_prompt_tokens: Math.round(mean(records.map((r) => r.prompt_tokens))),
-      mean_cost: Math.round(mean(records.map((r) => r.cost)) * 1e6) / 1e6,
+      runs,
+      mean_pass_rate: Math.round(mean(perRunRates) * 10) / 10,
+      median_pass_rate: Math.round(median(perRunRates) * 10) / 10,
+      min_pass_rate: Math.round(Math.min(...perRunRates) * 10) / 10,
+      mean_turns: Math.round(mean(flat.map((r) => r.turns)) * 10) / 10,
+      mean_prompt_tokens: Math.round(mean(flat.map((r) => r.prompt_tokens))),
+      mean_cost: Math.round(mean(flat.map((r) => r.cost)) * 1e6) / 1e6,
+      flaky_tasks,
     });
   }
-  fs.writeFileSync(path.join(dir, 'ablation.json'), JSON.stringify({ generated_at: new Date().toISOString(), model: o.cfg.model, configs: rows }, null, 2));
-  process.stdout.write(`\n===== 消融对照（${o.tasks.length} 任务）=====\n`);
-  process.stdout.write(`${padCell('配置', 16)}${padCell('通过率', 12)}${padCell('均回合', 8)}${padCell('均prompt_tok', 14)}费用/任务\n`);
+  fs.writeFileSync(path.join(dir, 'ablation.json'), JSON.stringify({ generated_at: new Date().toISOString(), model: o.cfg.model, runs, configs: rows }, null, 2));
+  process.stdout.write(`\n===== 消融对照（${o.tasks.length} 任务 × ${runs} 轮）=====\n`);
+  process.stdout.write(`${padCell('配置', 16)}${padCell('均值%', 8)}${padCell('中位%', 8)}${padCell('最低%', 8)}${padCell('均回合', 8)}${padCell('ptok', 8)}费用  flaky\n`);
   for (const r of rows) {
     process.stdout.write(
-      `${padCell(r.name, 16)}${padCell(`${r.passed}/${r.total}(${r.pass_rate}%)`, 12)}${padCell(String(r.mean_turns), 8)}${padCell(String(r.mean_prompt_tokens), 14)}${r.mean_cost.toFixed(4)}${o.cfg.currency}\n`
+      `${padCell(r.name, 16)}${padCell(String(r.mean_pass_rate), 8)}${padCell(String(r.median_pass_rate), 8)}${padCell(String(r.min_pass_rate), 8)}${padCell(String(r.mean_turns), 8)}${padCell(String(r.mean_prompt_tokens), 8)}${r.mean_cost.toFixed(4)}  ${r.flaky_tasks.join(',') || '—'}\n`
     );
   }
   process.stdout.write(`→ ${path.join(dir, 'ablation.json')}\n`);
@@ -260,14 +298,11 @@ function countBy(xs: string[]): Record<string, number> {
   return out;
 }
 
-function classifyFailure(status: string, detail: string): string {
+function classifyFailure(status: string, gradeReason: string): string {
   if (status === 'error') return 'provider_error';
   if (status === 'budget') return 'budget';
   if (status === 'max_turns') return 'max_turns';
-  if (detail.includes('文件不存在') || detail.includes('缺少')) return 'missing_deliverable';
-  if (detail.includes('提取不到数字')) return 'wrong_answer';
-  if (detail.includes('退出码') || detail.includes('未命中') || detail.includes('期望')) return 'grader_mismatch';
-  return 'other';
+  return gradeReason === 'none' ? 'grader_mismatch' : gradeReason;
 }
 
 export interface BenchTaskStat {

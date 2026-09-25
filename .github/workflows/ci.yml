@@ -19,6 +19,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Show toolchain
         run: node --version
+      - name: Install dev tooling (typescript + @types/node)
+        run: npm install --no-audit --no-fund
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
       - name: Offline self-test (no API key required)
         run: node src/cli.ts selftest
       - name: Mock end-to-end eval (no API key required)
