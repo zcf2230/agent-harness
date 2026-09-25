@@ -21,7 +21,7 @@ function extractNumbers(s: string): number[] {
   return out;
 }
 
-export type FailReason = 'none' | 'missing_deliverable' | 'wrong_answer' | 'grader_mismatch' | 'test_failed';
+export type FailReason = 'none' | 'missing_deliverable' | 'wrong_answer' | 'grader_mismatch' | 'test_failed' | 'grader_tampered';
 
 export async function gradeTask(
   task: TaskDef,

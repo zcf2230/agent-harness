@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULTS } from './config.ts';
 import { estimateTextTokens, estimateMessagesTokens, writeJsonAtomic } from './util.ts';
 import { safeResolve, resolveExecutable } from './agent/sandbox.ts';
-import { splitGroups, compactMessages } from './agent/context.ts';
+import { splitGroups, compactMessages, groupsToKeepForBudget } from './agent/context.ts';
 import { executeTool } from './agent/tools.ts';
 import { RunLog } from './agent/checkpoint.ts';
 import { newRunState, runAgent } from './agent/loop.ts';
@@ -134,6 +134,17 @@ async function testContext(): Promise<void> {
   };
   const c2 = await compactMessages(failing, script, 3);
   check('LLM 失败时规则兜底仍压缩', c2.compacted && c2.method === 'rule' && !!c2.messages && c2.messages.some((m) => m.content!.includes('调用 run_js')), c2.method);
+
+  // 预算缩放：紧预算下 4 组也应收缩保留组并触发压缩（修掉"空对照"）
+  const script4: Message[] = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'task' }];
+  for (let i = 0; i < 4; i++) {
+    script4.push({ role: 'assistant', content: null, tool_calls: [{ id: `k${i}`, name: 'run_js', arguments: JSON.stringify({ code: 'x'.repeat(1200) }) }] });
+    script4.push({ role: 'tool', tool_call_id: `k${i}`, name: 'run_js', content: 'y'.repeat(1200) });
+  }
+  const keep4 = groupsToKeepForBudget(script4, 900);
+  check('紧预算下保留组数收缩(<4)', keep4 >= 1 && keep4 < 4, `keep=${keep4}`);
+  const c4 = await compactMessages(summarizer, script4, keep4);
+  check('4 组紧预算也能触发压缩', c4.compacted && c4.droppedGroups >= 1, `dropped=${c4.droppedGroups}`);
 }
 
 async function testCheckpoint(): Promise<void> {
@@ -222,6 +233,20 @@ async function testLoop(): Promise<void> {
   await runAgent({ provider: new MockProvider(dlPlan), cfg: dlCfg, state: newRunState(dlTask, dlCfg), workspace: dlWs, log: dlLog, requiredFiles: requiredOutputFiles(dlTask) });
   check('交付物缺失触发定向提醒', RunLog.loadEvents(path.join(tmpRoot, 'run-dl-log')).some((e) => e.type === 'nudge' && e.data.type === 'deliverable'), '');
   check('提醒后模型补齐交付物文件', fs.existsSync(path.join(dlWs, 'out.txt')) && fs.readFileSync(path.join(dlWs, 'out.txt'), 'utf8') === 'HI', '');
+
+  // 篡改检测：模型用 run_js 绕过 write_file 拒绝，直接改受保护验收文件 → 判分前哈希应检出
+  const tamperTask: TaskDef = {
+    id: 'tam', name: '篡改检测', category: 'demo', prompt: 'x', max_turns: 4,
+    workspace_files: [{ path: 'test.mjs', content: "console.log('OK');\n", protected: true }],
+    grade: { type: 'run_test', command: 'node test.mjs' },
+  };
+  const tplan = (messages: Message[]) => {
+    const done = messages.some((m) => m.role === 'tool' && (m.content ?? '').includes('TAMPERED'));
+    if (done) return finish('done');
+    return callTool('run_js', { code: "import fs from 'node:fs'; fs.chmodSync('test.mjs',0o644); fs.writeFileSync('test.mjs','console.log(1)'); console.log('TAMPERED');" });
+  };
+  const { record: trec } = await executeTask({ task: tamperTask, provider: new MockProvider(tplan), cfg, runDir: path.join(tmpRoot, 'tamper-run') });
+  check('run_js 篡改验收文件被哈希检出为失败', trec.reason === 'grader_tampered' && !trec.pass, `reason=${trec.reason}`);
 }
 
 async function testWire(): Promise<void> {

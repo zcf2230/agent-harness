@@ -86,7 +86,7 @@ export async function compactMessages(
 ): Promise<CompactResult> {
   const before = estimate(messages);
   const { head, groups } = splitGroups(messages);
-  const keep = Math.min(groups.length, Math.max(2, keepGroups));
+  const keep = Math.min(groups.length, Math.max(1, keepGroups));
   const dropped = groups.slice(0, groups.length - keep);
   const kept = groups.slice(groups.length - keep);
   if (dropped.length === 0) {
@@ -130,6 +130,22 @@ export async function compactMessages(
   return { compacted: true, before, after, method, droppedGroups: dropped.length, messages: out, usage };
 }
 
+// 按 token 预算从最新往回决定保留几个完整回合：只保留塞得进预算的最近组，其余丢弃。
+// 这样只要总用量超预算就会触发压缩（不再要求攒够固定 4 组），修掉"空对照"。
+export function groupsToKeepForBudget(messages: Message[], budget: number): number {
+  const { head, groups } = splitGroups(messages);
+  if (groups.length < 2) return groups.length;
+  let tok = estimate(head) + 200;
+  let keep = 0;
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const g = estimate(groups[i]);
+    if (keep > 0 && tok + g > budget) break;
+    tok += g;
+    keep++;
+  }
+  return Math.max(1, Math.min(keep, groups.length - 1));
+}
+
 export async function maybeCompact(
   provider: ChatProvider,
   state: RunState,
@@ -143,7 +159,8 @@ export async function maybeCompact(
   if (used < budget) {
     return { ...NO_COMPACT, before: used, after: used };
   }
-  const result = await compactMessages(provider, state.messages, 4);
+  const keepGroups = groupsToKeepForBudget(state.messages, budget);
+  const result = await compactMessages(provider, state.messages, keepGroups);
   if (result.compacted && result.messages) {
     state.messages = result.messages;
     if (result.usage) {

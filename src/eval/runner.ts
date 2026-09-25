@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import type { ChatProvider, RunState, TaskDef } from '../types.ts';
 import type { HarnessConfig } from '../config.ts';
 import { computeCost } from '../config.ts';
@@ -48,6 +49,30 @@ export function setupWorkspace(task: TaskDef, workspace: string): Set<string> {
   return protectedPaths;
 }
 
+function hashFiles(workspace: string, files: Set<string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of files) {
+    try {
+      out[f] = crypto.createHash('sha256').update(fs.readFileSync(path.join(workspace, f))).digest('hex');
+    } catch {
+      out[f] = '<missing>';
+    }
+  }
+  return out;
+}
+
+function tamperedFiles(workspace: string, baseline: Record<string, string>): string[] {
+  return Object.entries(baseline)
+    .filter(([f, h]) => {
+      try {
+        return crypto.createHash('sha256').update(fs.readFileSync(path.join(workspace, f))).digest('hex') !== h;
+      } catch {
+        return true;
+      }
+    })
+    .map(([f]) => f);
+}
+
 export function createRunDir(cfg: HarnessConfig, batchDir: string, taskId: string, taskName: string): string {
   return path.join(batchDir, `${taskId}-${slug(taskName)}-${uid(4)}`);
 }
@@ -66,6 +91,7 @@ export async function executeTask(opts: {
   const log = new RunLog(opts.runDir);
   let state: RunState;
   let protectedSet: Set<string> | undefined;
+  let baselineHashes: Record<string, string> = {};
   const startAt = Date.now();
   if (opts.resume && fs.existsSync(path.join(opts.runDir, 'state.json'))) {
     state = RunLog.loadState(opts.runDir);
@@ -85,9 +111,13 @@ export async function executeTask(opts: {
     });
     log.saveState(state);
     protectedSet = protectedPaths;
+    baselineHashes = hashFiles(workspace, protectedPaths);
   }
   state = await runAgent({ provider: opts.provider, cfg, state, workspace, log, mcp: opts.mcp ?? null, requiredFiles: requiredOutputFiles(task), protectedPaths: protectedSet, print: opts.print });
-  const graded = await gradeTask(task, workspace, state.answer, cfg);
+  const tampered = protectedSet && protectedSet.size > 0 ? tamperedFiles(workspace, baselineHashes) : [];
+  const graded = tampered.length > 0
+    ? { pass: false, reason: 'grader_tampered' as const, detail: `验收文件被篡改：${tampered.join(', ')}（判分独立性受损，记为失败）` }
+    : await gradeTask(task, workspace, state.answer, cfg);
   const duration_ms = Date.now() - startAt;
   const record: TaskRecord = {
     task_id: task.id,

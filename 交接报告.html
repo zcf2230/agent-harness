@@ -113,7 +113,7 @@
 
 <h2>五、关键数据与证据（均可复现）</h2>
 <div class="grid">
-  <div class="kpi"><b>85</b><span>项离线自检断言，全绿；CI 通过</span></div>
+  <div class="kpi"><b>88</b><span>项离线自检断言，全绿；CI 通过</span></div>
   <div class="kpi"><b>4 + 3</b><span>真实跑分修复 4 个跨层缺陷 + 评审后修 3 个安全/完整性问题</span></div>
   <div class="kpi"><b>22</b><span>任务 / 7 能力域 / 4 类判分器</span></div>
   <div class="kpi"><b>main</b><span>默认分支（master 已删）</span></div>
@@ -166,7 +166,7 @@
 <ul>
   <li><b>沙箱残留</b>：Node 权限模型不拦截网络；<code>run_py</code> 无对等的零依赖隔离（工具层路径约束 + 超时）。生产需容器后端。</li>
   <li><b>判分文件可写</b>：run_test 类任务的验收脚本仍位于可写工作区内，模型理论上可改写它（g01 已改可执行校验，但 c03/x01/x02 的 test 文件保护是下一步：只读/哈希校验）。</li>
-  <li><b>压缩触发条件</b>：能力强、会并行工具调用的模型常在 ≤8 回合内完成，压缩不易触发；keep=4 阈值需随预算缩放（已列入待办）。</li>
+  <li><b>压缩触发</b>：保留组已改为随 token 预算缩放（不再硬编码 keep=4），真实跑分中 x07/x10 现能触发压缩（compactions=1）；但多数任务仍 ≤8 回合完成，压缩只在长链/紧预算下生效。</li>
   <li><b>度量数字待重测</b>：可靠性/消融的具体百分比当前不主张，需 R≥3 配对重测。</li>
   <li><b>单模型</b>：仅对 deepseek-chat 评测过。</li>
   <li><b>已完成</b>：默认分支已切换为 <code>main</code>，冗余的 <code>master</code> 已删除。</li>
@@ -176,7 +176,7 @@
 <h2>八、复现与验证</h2>
 <pre><code>export PATH="/usr/bin:/bin:$PATH"
 cd agent-harness
-node src/cli.ts selftest                 # 85 项离线断言（无需 key）
+node src/cli.ts selftest                 # 88 项离线断言（无需 key）
 node src/cli.ts eval --all --yes         # 真实评测（需 DEEPSEEK_API_KEY）
 node src/cli.ts bench --all --runs 3 --yes   # pass@R / 方差 / flaky
 node src/cli.ts ablate --all --yes       # 消融对照表</code></pre>
