@@ -15,7 +15,7 @@ export function buildSystemPrompt(task: TaskDef): string {
     '工作环境规则：',
     '- 当前工作目录是任务工作区，所有文件工具只接受工作区内的相对路径，禁止访问工作区之外的文件；',
     '- run_js 以 ESM 模块执行（用 import，不支持 require），结果通过 console.log 打印；run_py 用 print 输出；',
-    '- 代码执行没有网络访问权限，报错误码 127 表示解释器不存在；',
+    '- 代码执行的文件读写被限制在工作区内（Node 权限模型强制），但当前不保证拦截网络访问，请勿假设可联网或依赖外网；报错误码 127 表示解释器不存在；',
     '- 工具输出过长时会被截断，读大文件请用 read_file 的 offset/limit 分段读取。',
     '工作方式要求：',
     '1. 需要精确计算或可验证结果时，必须写代码验证，禁止心算；',
@@ -105,9 +105,9 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
           deliverableReminded.add(key);
           state.messages.push({
             role: 'user',
-            content: `⚠ 交付物缺失：任务要求但工作区尚未找到这些文件：${missing.join('、')}。请立即用 write_file 按任务要求生成它们，否则判分会因缺少文件而失败。`,
+            content: '⚠ 交付物检查：任务要求你生成的输出文件尚未在工作区检测到。请立即用 write_file 按任务要求生成它，否则判分会因缺少该文件而失败。（不告诉你具体文件名，请回顾任务要求。）',
           });
-          log.event('nudge', { turn: state.turn, type: 'deliverable', missing });
+          log.event('nudge', { turn: state.turn, type: 'deliverable', missing_count: missing.length });
         }
       }
       const c = await maybeCompactGuarded(o.provider, state, cfg);
@@ -142,20 +142,7 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
       const sig = nonFinish.map((c) => `${c.name}:${c.arguments}`).sort().join('|');
       const repeated = cfg.terminationNudge && sig !== '' && sig === prevSig;
       prevSig = sig;
-      for (const call of calls) {
-        if (call.name === 'finish') {
-          let answer = '';
-          try {
-            answer = String(JSON.parse(call.arguments || '{}').answer ?? '');
-          } catch {
-            answer = call.arguments;
-          }
-          state.status = 'final';
-          state.answer = answer;
-          state.stop_reason = 'finish';
-          finished = true;
-          break;
-        }
+      for (const call of nonFinish) {
         const result =
           mcp && mcp.has(call.name)
             ? await mcp.call(call.name, call.arguments)
@@ -179,6 +166,19 @@ export async function runAgent(o: RunOptions): Promise<RunState> {
           output: tm.content,
         });
         o.print?.(`  ${result.ok ? '✓' : '✗'} ${call.name} ${(result.ms / 1000).toFixed(1)}s`);
+      }
+      const finishCall = calls.find((c) => c.name === 'finish');
+      if (finishCall) {
+        let answer = '';
+        try {
+          answer = String(JSON.parse(finishCall.arguments || '{}').answer ?? '');
+        } catch {
+          answer = finishCall.arguments;
+        }
+        state.status = 'final';
+        state.answer = answer;
+        state.stop_reason = 'finish';
+        finished = true;
       }
       log.saveState(state);
     }

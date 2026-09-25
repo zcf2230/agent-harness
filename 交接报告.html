@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Harness 项目交接报告</title>
+<style>
+  :root { --ink:#1a2233; --dim:#5b6577; --line:#d9dee8; --accent:#2b5fd0; --bg:#fff; --code:#f5f7fb; --warn:#b45309; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#eef1f6; color:var(--ink); font: 15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; }
+  .page { max-width: 860px; margin: 24px auto; background: var(--bg); padding: 48px 56px; box-shadow: 0 2px 20px rgba(20,30,60,.08); }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing:.5px; }
+  h2 { font-size: 19px; margin: 30px 0 10px; padding-bottom:6px; border-bottom:2px solid var(--accent); }
+  h3 { font-size: 16px; margin: 18px 0 6px; color:#243; }
+  .meta { color: var(--dim); font-size: 13px; margin-bottom: 8px; }
+  .meta a { color: var(--accent); text-decoration:none; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 4px; font: 13px/1.6 Consolas,"Cascadia Code",monospace; }
+  pre { background: var(--code); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow:auto; }
+  pre code { background:none; padding:0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border:1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f0f3fa; }
+  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; background:#e8f0ff; color:var(--accent); margin-right:6px; }
+  .callout { border-left:4px solid var(--accent); background:#f6f9ff; padding:10px 16px; margin:14px 0; border-radius:0 8px 8px 0; }
+  .warn { border-left-color: var(--warn); background:#fff8ef; }
+  .grid { display:grid; grid-template-columns: repeat(2,1fr); gap: 10px 22px; }
+  .kpi { border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .kpi b { font-size:22px; color:var(--accent); display:block; }
+  .kpi span { color:var(--dim); font-size:13px; }
+  footer { margin-top: 36px; padding-top: 14px; border-top:1px solid var(--line); color:var(--dim); font-size:12px; }
+  @media print {
+    body { background:#fff; }
+    .page { box-shadow:none; margin:0; max-width:none; padding: 0 6mm; }
+    h2 { break-after: avoid; }
+    table, .kpi, .callout, pre { break-inside: avoid; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Agent Harness 项目交接报告</h1>
+<div class="meta">
+  日期：2026-09-25 ｜ 作者：<a href="https://github.com/zcf2230">zcf2230</a> ｜
+  仓库：<a href="https://github.com/zcf2230/agent-harness">github.com/zcf2230/agent-harness</a>（public，MIT）
+</div>
+<div class="meta">
+  <span class="tag">零依赖 TypeScript</span><span class="tag">Agent 运行时</span><span class="tag">评测闭环</span><span class="tag">MCP</span><span class="tag">消融实验</span>
+</div>
+
+<div class="callout">
+<b>一句话概述：</b>独立设计与实现了一个带<b>可复现评测闭环</b>的 DeepSeek Agent 运行时——不只是"调 API 拼 prompt"，而是把 agent 变成可度量、可复盘、可回归的系统，并用真实跑分量化了每个机制的贡献。
+</div>
+
+<h2>一、目的与背景</h2>
+<ul>
+  <li><b>目标</b>：产出一个"含金量高、替代性不强、可写进简历"的系统级项目，用于校招/实习投递。</li>
+  <li><b>核心主张</b>：模型决定上限，harness 决定下限。价值不在模型，而在围绕模型的<b>工程与度量</b>。</li>
+  <li><b>约束</b>：面向在校生，需在无团队、个人可维护、成本可控（DeepSeek API，全量评测约 0.1–0.2¥/轮）前提下体现真实工程深度。</li>
+</ul>
+
+<h2>二、范围与关键技术决策（含取舍）</h2>
+<table>
+  <tr><th>决策</th><th>选择</th><th>理由 / 放弃的方案</th></tr>
+  <tr><td>运行形态</td><td>TypeScript CLI + 本地网页回放</td><td>放弃单文件 HTML：真实评测需文件系统/进程/网络能力，CLI 更合适且无 CORS 问题</td></tr>
+  <tr><td>依赖</td><td>零第三方包、无构建</td><td>用 Node 24 原生运行 .ts；降低审阅/复现门槛，规避依赖腐化</td></tr>
+  <tr><td>模型后端</td><td>OpenAI 兼容 provider 抽象，默认 DeepSeek</td><td>可换任意兼容端点；但当前仅对 deepseek-chat 做过真实评测</td></tr>
+  <tr><td>沙箱</td><td>进程级 + Node <code>--permission</code> 运行时隔离</td><td>本机无 Docker；容器化列为后续路线，诚实标注网络/Python 不受该模型约束</td></tr>
+  <tr><td>判分</td><td>独立判分器（不复用被测模型）</td><td>避免"模型给自己打分"导致指标虚高</td></tr>
+</table>
+
+<h2>三、工作过程（分阶段）</h2>
+<ol>
+  <li><b>核心运行时</b>：provider 层（指数退避重试）、7 个工具、执行沙箱、主循环。</li>
+  <li><b>上下文与续跑</b>：按"回合"分组的 LLM 压缩 + 规则兜底；<code>trajectory.jsonl</code> 事件溯源 + 原子快照断点续跑。</li>
+  <li><b>评测闭环</b>：4 类判分器、任务集、并发 runner、成本核算、CLI。</li>
+  <li><b>回放面板与自检</b>：单文件 HTML 轨迹回放；离线 selftest；README。</li>
+  <li><b>MCP 客户端</b>：手写 stdio JSON-RPC 握手与工具桥接（命名空间化），含离线测试服务器。</li>
+  <li><b>扩充与度量</b>：任务扩到 22（难度标注 + 按任务上下文预算）；新增 <code>bench</code>（pass@R/方差/flaky）。</li>
+  <li><b>真实跑分与修复</b>：连真实 API 跑分，定位并修复 4 个 mock 测不到的跨层缺陷。</li>
+  <li><b>含金量强化</b>：OS 强制沙箱、终止/交付物兜底、GitHub Actions CI。</li>
+  <li><b>研究级严谨</b>：消融实验、成本/时限护栏、失败归因分类、provider/MCP 韧性自检。</li>
+  <li><b>发布</b>：建仓、MIT、按个人身份提交并推送、CI 上线。</li>
+</ol>
+
+<h2>四、交付产出</h2>
+<h3>4.1 仓库结构</h3>
+<pre><code>agent-harness/
+├── README.md / RESUME.md / LICENSE / config.example.json
+├── .github/workflows/ci.yml        # 离线自检 + mock 评测（checkout@v5）
+├── src/  (17 个 .ts)
+│   ├── providers/   openai.ts(重试+toWire) · mock.ts
+│   ├── agent/       loop · tools · sandbox(Node权限) · context(压缩) · checkpoint
+│   ├── mcp/         client(stdio JSON-RPC) · bridge(命名空间) · test-server
+│   ├── eval/        grade(4类判分) · runner(并发/bench/ablation/归因)
+│   └── cli.ts · config.ts · types.ts · util.ts · selftest.ts
+├── tasks/  (22 个 JSON：12 基础 + 10 hard)
+└── viewer/replay.html              # 轨迹回放面板</code></pre>
+
+<h3>4.2 能力矩阵</h3>
+<div class="grid">
+  <div class="kpi"><b>沙箱</b><span>7 工具循环 + Node 权限模型强制隔离</span></div>
+  <div class="kpi"><b>上下文</b><span>回合级压缩 + 断点续跑</span></div>
+  <div class="kpi"><b>评测</b><span>22 任务 / 4 判分器 / 并发 / 成本</span></div>
+  <div class="kpi"><b>MCP</b><span>stdio 客户端 + 工具热接入</span></div>
+  <div class="kpi"><b>度量</b><span>bench(pass@R/方差/flaky) + 消融</span></div>
+  <div class="kpi"><b>护栏</b><span>成本/时限止损 + 失败归因</span></div>
+</div>
+
+<h2>五、关键数据与证据（均可复现）</h2>
+<div class="grid">
+  <div class="kpi"><b>83</b><span>项离线自检断言，全绿；CI 通过</span></div>
+  <div class="kpi"><b>4 + 3</b><span>真实跑分修复 4 个跨层缺陷 + 评审后修 3 个安全/完整性问题</span></div>
+  <div class="kpi"><b>22</b><span>任务 / 7 能力域 / 4 类判分器</span></div>
+  <div class="kpi"><b>4</b><span>次提交，master=main</span></div>
+</div>
+
+<div class="callout warn">
+<b>诚实声明（评审后修订）：</b>本报告早期版本给出的"套件可靠性 98.5%±2.1% → 100%±0%""护栏 +4.5%""压缩 −4% token"
+等数字<b>已撤回</b>。原因见 §5.2：首轮消融为单轮（n=1）、压缩对照组实为空跑（baseline 自身压缩事件=0）、
+且 g01 的旧判分规则过松（只要求 ≤240 字符且含关键词）。可信数字须"每配置 R≥3、逐任务配对、报 pass@R/中位数"重测后再给。
+</div>
+
+<h3>5.1 真实跑分定位并修复的 4 个缺陷</h3>
+<table>
+  <tr><th>缺陷</th><th>为何 mock 测不出</th><th>修复</th></tr>
+  <tr><td>run_js 相对路径叠加 cwd → 路径重复</td><td>mock 不真正执行 node</td><td>脚本用绝对路径</td></tr>
+  <tr><td>assistant <code>tool_calls</code> 扁平回传 → DeepSeek 422</td><td>mock 不校验 wire 格式</td><td><code>toWire</code> 还原嵌套 function 结构</td></tr>
+  <tr><td>c01 期望正则把第 26 行误写为 Fizz</td><td>—（任务笔误）</td><td>修正；建立"判分器 gold 自校验"纪律</td></tr>
+  <tr><td><code>answer_number</code> 取末位数字被中间量带偏</td><td>真实答案格式才触发</td><td>改为"含正确值即通过"</td></tr>
+</table>
+
+<h3>5.2 消融实验（deepseek-chat，22 任务真实跑分）</h3>
+<table>
+  <tr><th>配置</th><th>通过率</th><th>均回合</th><th>均 prompt token</th><th>失败归因</th></tr>
+  <tr><td>baseline（全开）</td><td>22/22 (100%)</td><td>4.2</td><td>8361</td><td>—</td></tr>
+  <tr><td>关闭上下文压缩</td><td>22/22</td><td>4.6</td><td>8692 (+4%)</td><td>—</td></tr>
+  <tr><td>关闭收尾/交付物兜底</td><td>21/22 (95.5%)</td><td>4.7</td><td>8754</td><td>max_turns ×1</td></tr>
+  <tr><td>关闭 Node 权限沙箱</td><td>21/22</td><td>4.1</td><td>7709</td><td>max_turns ×1（方差）</td></tr>
+</table>
+<p><b>结论（评审后撤回量化解读）</b>：此表为<b>单轮 n=1</b>，不足以支撑"护栏 +4.5%""压缩 −4% token"这类归因——
+baseline 自身压缩事件数为 0（多数任务 ≤8 回合、并行工具调用，从不触发压缩），故"关压缩"实为<b>空对照</b>，
+其 token 差异是两次独立 API 调用的噪声；<code>no_guardrail</code> 与 <code>no_sandbox</code> 挂的是同一个 g01、同一种 max_turns，
+效应无法与消融变量分离。正确做法：每配置 R≥3、逐任务配对、报 pass@R 与中位数后再下结论。<b>本表当前只作为方法与可复现脚手架展示，不作为量化结论。</b></p>
+
+<h2>六、第三方评审与整改</h2>
+<p>本报告初版经一次严格评审，指出若干<b>真实且严重</b>的问题，已据此整改（每项均补自检锁死）：</p>
+<table>
+  <tr><th>评审指出</th><th>严重度</th><th>整改</th></tr>
+  <tr><td>判分器 <code>run_test</code> 执行模型写的文件时不带沙箱 → 把 payload 写进交付物即可越狱</td><td>P1 安全</td><td>run_test 对 node 命令同样施加 <code>--permission</code> 工作区 jail；自检断言"判分时越界写被拒"</td></tr>
+  <tr><td>子进程继承全部环境变量（含 <code>DEEPSEEK_API_KEY</code>），叠加不拦网络 → 完整外泄链</td><td>P1 安全</td><td>改为 env 白名单透传；自检断言 key 不可见、PATH 仍可用</td></tr>
+  <tr><td>系统提示词谎称"代码执行无网络"（--permission 不拦网络）</td><td>P1 诚实</td><td>改为"限制文件读写、不保证拦截网络"</td></tr>
+  <tr><td>交付物兜底把确切文件名回灌给被测模型 → 泄漏验收标准</td><td>P2 独立性</td><td>改为通用提醒，不点名文件</td></tr>
+  <tr><td>g01 旧 gold 过松（≤240 字符 + 含关键词即可），撑起虚高通过率</td><td>P2 判分</td><td>改为可执行校验：真数汉字数 30–80 且含术语；旧"100%±0"数字撤回，待重测</td></tr>
+  <tr><td>首轮消融 n=1、压缩对照空跑、护栏效应与变量混淆</td><td>P2 度量</td><td>README/报告撤回量化结论，标注须 R≥3 配对重测</td></tr>
+  <tr><td>stderr 截断丢全部、同回合 finish 吞写盘、压缩自身成本未计、re.test 调两次矛盾</td><td>P3 正确性</td><td>均已修复</td></tr>
+</table>
+<p class="meta">评审探针目录 <code>work/</code> 已清理；仓库跟踪文件由作者维护。</p>
+
+<h2>七、已知局限与诚实声明</h2>
+<div class="callout warn">
+<ul>
+  <li><b>沙箱残留</b>：Node 权限模型不拦截网络；<code>run_py</code> 无对等的零依赖隔离（工具层路径约束 + 超时）。生产需容器后端。</li>
+  <li><b>判分文件可写</b>：run_test 类任务的验收脚本仍位于可写工作区内，模型理论上可改写它（g01 已改可执行校验，但 c03/x01/x02 的 test 文件保护是下一步：只读/哈希校验）。</li>
+  <li><b>压缩触发条件</b>：能力强、会并行工具调用的模型常在 ≤8 回合内完成，压缩不易触发；keep=4 阈值需随预算缩放（已列入待办）。</li>
+  <li><b>度量数字待重测</b>：可靠性/消融的具体百分比当前不主张，需 R≥3 配对重测。</li>
+  <li><b>单模型</b>：仅对 deepseek-chat 评测过。</li>
+  <li><b>待办</b>：默认分支 <code>master→main</code> 自动切换未成（GitHub 设置页需真实交互），内容不受影响，留作手动一步。</li>
+</ul>
+</div>
+
+<h2>八、复现与验证</h2>
+<pre><code>export PATH="/usr/bin:/bin:$PATH"
+cd agent-harness
+node src/cli.ts selftest                 # 83 项离线断言（无需 key）
+node src/cli.ts eval --all --yes         # 真实评测（需 DEEPSEEK_API_KEY）
+node src/cli.ts bench --all --runs 3 --yes   # pass@R / 方差 / flaky
+node src/cli.ts ablate --all --yes       # 消融对照表</code></pre>
+
+<h2>九、给审阅者的评价维度与建议征集</h2>
+<p>恳请重点评估以下方面，并指出我可能高估/低估之处：</p>
+<ol>
+  <li><b>工程深度与真实性</b>：OS 强制沙箱、上下文压缩+续跑、MCP 客户端的实现是否扎实、有无"为简历堆词"之嫌？</li>
+  <li><b>评测严谨性</b>：22 任务/4 判分器/消融/方差是否构成可信的评测方法学？消融结论是否成立、有无混淆变量？</li>
+  <li><b>含金量与区分度</b>：相对同类"agent 项目"，本项目的不可替代点是什么？还缺什么会更硬？</li>
+  <li><b>诚实度</b>：局限声明是否充分、结论是否被数据支撑？有没有该暴露却没暴露的问题？</li>
+  <li><b>可维护性/代码质量</b>：零依赖 TS 的取舍、模块划分、测试覆盖是否合理？</li>
+  <li><b>下一步优先级</b>：容器沙箱、多模型对比、MCP server、流式——哪个 ROI 最高？</li>
+</ol>
+
+<h2>附录：可复制的"评审提示词"</h2>
+<div class="callout">
+<p style="margin-top:0">把下面这段连同本仓库链接发给审阅者（人或 AI）即可：</p>
+<pre><code>请审阅我的开源项目 github.com/zcf2230/agent-harness（一个零依赖 TypeScript
+的 DeepSeek Agent Harness，含沙箱工具循环、上下文压缩+断点续跑、独立判分、
+MCP 客户端、可靠性 bench 与消融实验）。请从以下角度给出严格评价与改进建议：
+1) 工程深度与真实性（是否名副其实，有无过度包装）；
+2) 评测方法学严谨性（任务设计、判分独立性、消融是否控制变量、方差/flaky 结论是否成立）；
+3) 相对同类 agent 项目的区分度与不可替代性；
+4) 代码质量与可维护性；
+5) 我可能高估或低估的点，以及下一步 ROI 最高的改进。
+请指出具体问题并给出可执行建议，不必客套。</code></pre>
+</div>
+
+<footer>
+本报告由项目作者整理，用于第三方检阅。数据来自仓库内 <code>runs/*/summary.json</code>、<code>bench.json</code>、<code>ablation.json</code> 与 <code>selftest</code>，可复现。
+</footer>
+
+</div>
+</body>
+</html>

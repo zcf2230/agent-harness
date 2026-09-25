@@ -12,7 +12,7 @@ import { newRunState, runAgent } from './agent/loop.ts';
 import { connectMcpServers, emptyMcpBridge } from './mcp/bridge.ts';
 import { McpClient } from './mcp/client.ts';
 import { gradeTask, loadTasks, requiredOutputFiles } from './eval/grade.ts';
-import { executeTask } from './eval/runner.ts';
+import { executeTask, setupWorkspace } from './eval/runner.ts';
 import { MockProvider, callTool, finish } from './providers/mock.ts';
 import { OpenAIProvider, toWire } from './providers/openai.ts';
 import type { ChatProvider, Message, TaskDef } from './types.ts';
@@ -215,7 +215,7 @@ async function testLoop(): Promise<void> {
   const dlWs = path.join(tmpRoot, 'run-dl-ws');
   const dlLog = new RunLog(path.join(tmpRoot, 'run-dl-log'));
   const dlPlan = (messages: Message[]) => {
-    const saw = messages.some((m) => m.role === 'user' && (m.content ?? '').includes('交付物缺失'));
+    const saw = messages.some((m) => m.role === 'user' && (m.content ?? '').includes('交付物检查'));
     return saw ? callTool('write_file', { path: 'out.txt', content: 'HI' }) : callTool('run_js', { code: 'console.log(1)' });
   };
   const dlCfg = { ...cfg, terminationNudge: true };
@@ -282,6 +282,29 @@ async function testResilience(): Promise<void> {
   try { await client.request('boom'); } catch (e: any) { mcpErr = String(e?.message ?? e); }
   client.close();
   check('MCP JSON-RPC error 被 reject', mcpErr.includes('故意失败') || mcpErr.includes('-32000'), mcpErr);
+}
+
+async function testSecurity(): Promise<void> {
+  section('安全边界（env 白名单 + 判分器沙箱）');
+  const ws = path.join(tmpRoot, 'sec-ws');
+  fs.mkdirSync(ws, { recursive: true });
+  const ctx = { workspace: ws, cfg };
+  process.env.DEEPSEEK_API_KEY = 'SECRET-TEST-KEY-123';
+  const envProbe = await executeTool(ctx, 'run_js', JSON.stringify({ code: "console.log('KEY=' + (process.env.DEEPSEEK_API_KEY || 'ABSENT'));" }));
+  check('子进程环境白名单剥离 API key', envProbe.output.includes('ABSENT') && !envProbe.output.includes('SECRET-TEST-KEY-123'), envProbe.output.slice(0, 80));
+  delete process.env.DEEPSEEK_API_KEY;
+  const pathProbe = await executeTool(ctx, 'run_js', JSON.stringify({ code: "console.log('HASPATH=' + (process.env.PATH ? 'yes' : 'no'));" }));
+  check('白名单保留 PATH 使解释器可用', pathProbe.output.includes('HASPATH=yes'), pathProbe.output.slice(0, 60));
+  const outside = path.join(tmpRoot, 'sec-escaped.txt');
+  const task: TaskDef = {
+    id: 'sec', name: '逃逸', category: 'demo', prompt: 'x',
+    workspace_files: [{ path: 'solution.mjs', content: `import fs from 'node:fs'; try { fs.writeFileSync(${JSON.stringify(outside)}, 'pwned'); console.log('ESCAPED'); } catch (e) { console.log('DENIED', e.code); process.exit(1); }` }],
+    grade: { type: 'run_test', command: 'node solution.mjs' },
+  };
+  const gws = path.join(tmpRoot, 'sec-grade');
+  setupWorkspace(task, gws);
+  const graded = await gradeTask(task, gws, 'done', cfg);
+  check('判分器执行模型文件时也在沙箱内（越界写被拒）', !graded.pass && !fs.existsSync(outside), graded.detail.slice(0, 90));
 }
 
 async function testGraders(): Promise<void> {
@@ -418,6 +441,7 @@ async function main(): Promise<void> {
   await testWire();
   await testBudget();
   await testResilience();
+  await testSecurity();
   await testGraders();
   await testEvalE2E();
   await testBench();

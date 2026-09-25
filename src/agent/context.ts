@@ -67,6 +67,7 @@ export interface CompactResult {
   method: string;
   droppedGroups: number;
   messages: Message[] | null;
+  usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
 const NO_COMPACT: CompactResult = {
@@ -97,6 +98,7 @@ export async function compactMessages(
     .join('\n---\n');
   let summary = '';
   let method = 'rule';
+  let usage: { prompt_tokens: number; completion_tokens: number } | undefined;
   try {
     const resp = await provider.chat(
       [
@@ -106,6 +108,7 @@ export async function compactMessages(
       []
     );
     summary = (resp.message.content ?? '').trim();
+    usage = resp.usage;
     if (summary) method = 'llm';
   } catch {
     /* 走规则兜底 */
@@ -124,7 +127,7 @@ export async function compactMessages(
   if (after >= before) {
     return { ...NO_COMPACT, before, after: before, method: 'no-benefit' };
   }
-  return { compacted: true, before, after, method, droppedGroups: dropped.length, messages: out };
+  return { compacted: true, before, after, method, droppedGroups: dropped.length, messages: out, usage };
 }
 
 export async function maybeCompact(
@@ -143,6 +146,10 @@ export async function maybeCompact(
   const result = await compactMessages(provider, state.messages, 4);
   if (result.compacted && result.messages) {
     state.messages = result.messages;
+    if (result.usage) {
+      state.usage.prompt_tokens += result.usage.prompt_tokens;
+      state.usage.completion_tokens += result.usage.completion_tokens;
+    }
   }
   return result;
 }

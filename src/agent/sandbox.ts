@@ -20,6 +20,30 @@ export function relPath(workspace: string, abs: string): string {
   return path.relative(path.resolve(workspace), abs).split(path.sep).join('/');
 }
 
+// 子进程环境白名单：只透传解释器运行所需的变量，剥离 DEEPSEEK_API_KEY 等机密，
+// 防止模型生成的代码（run_js / 被判分执行的脚本）通过 process.env 读到凭据。
+const ENV_ALLOW = new Set([
+  'PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP', 'TMPDIR',
+  'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA',
+  'LANG', 'LC_ALL', 'SHELL', 'NODE_OPTIONS', 'PYTHONHOME', 'PYTHONPATH',
+  'OS', 'PROCESSOR_ARCHITECTURE', 'NUMBER_OF_PROCESSORS', 'FORCE_COLOR',
+]);
+
+export function childEnv(): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && ENV_ALLOW.has(k.toUpperCase())) out[k] = v;
+  }
+  return out;
+}
+
+// Node 权限模型旗标：把 run_js 及被判分执行的 node 脚本的文件读写关进工作区。
+export function nodeSandboxArgs(workspace: string, enabled: boolean): string[] {
+  if (!enabled) return [];
+  const ws = path.resolve(workspace);
+  return ['--permission', `--allow-fs-read=${ws}`, `--allow-fs-write=${ws}`];
+}
+
 export interface ExecOptions {
   cwd: string;
   timeoutMs: number;
@@ -47,7 +71,7 @@ export function exec(cmd: string, args: string[], o: ExecOptions): Promise<ExecR
         killSignal: 'SIGKILL',
         maxBuffer: 8 * 1024 * 1024,
         windowsHide: true,
-        env: { ...process.env },
+        env: childEnv(),
       },
       (err: any, stdout, stderr) => {
         const out = String(stdout ?? '');
@@ -63,9 +87,11 @@ export function exec(cmd: string, args: string[], o: ExecOptions): Promise<ExecR
         let truncatedOut = out;
         let truncatedErr = e2;
         if (truncatedOut.length + truncatedErr.length > o.maxOutput) {
-          const keep = Math.max(0, o.maxOutput - 60);
-          truncatedOut = truncatedOut.slice(0, keep) + '\n[输出已截断]';
-          truncatedErr = '';
+          // 保留 stderr 头部（报错信息最关键），再分配剩余预算给 stdout，绝不整段丢弃 stderr
+          const errBudget = Math.min(e2.length, Math.floor(o.maxOutput * 0.5));
+          truncatedErr = e2.slice(0, errBudget) + (e2.length > errBudget ? '\n[stderr 已截断]' : '');
+          const outBudget = Math.max(0, o.maxOutput - errBudget - 40);
+          truncatedOut = out.slice(0, outBudget) + (out.length > outBudget ? '\n[stdout 已截断]' : '');
         }
         resolve({ code, stdout: truncatedOut, stderr: truncatedErr, timedOut, missing, ms: Date.now() - started });
       }

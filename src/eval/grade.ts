@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { GradeRule, TaskDef } from '../types.ts';
 import type { HarnessConfig } from '../config.ts';
-import { exec, resolveExecutable, safeResolve } from '../agent/sandbox.ts';
+import { exec, resolveExecutable, safeResolve, nodeSandboxArgs } from '../agent/sandbox.ts';
 
 function extractNumbers(s: string): number[] {
   const out: number[] = [];
@@ -36,7 +36,8 @@ export async function gradeTask(
       case 'answer_regex': {
         const re = new RegExp(rule.pattern, rule.flags ?? '');
         const s = answer ?? '';
-        return { pass: re.test(s), detail: `answer_regex ${rule.pattern} → ${re.test(s) ? '命中' : '未命中'}` };
+        const pass = re.test(s);
+        return { pass, detail: `answer_regex ${rule.pattern} → ${pass ? '命中' : '未命中'}` };
       }
       case 'answer_number': {
         const nums = extractNumbers(answer ?? '');
@@ -56,12 +57,16 @@ export async function gradeTask(
         if (!fs.existsSync(abs)) return { pass: false, detail: `文件不存在: ${rule.path}` };
         const text = fs.readFileSync(abs, 'utf8');
         const re = new RegExp(rule.pattern, rule.flags ?? 's');
-        return { pass: re.test(text), detail: `file_regex ${rule.path} ${rule.pattern} → ${re.test(text) ? '命中' : '未命中'}` };
+        const pass = re.test(text);
+        return { pass, detail: `file_regex ${rule.path} ${rule.pattern} → ${pass ? '命中' : '未命中'}` };
       }
       case 'run_test': {
         const parts = rule.command.split(/\s+/).filter(Boolean);
         const cmd = resolveExecutable(parts[0], cfg.pythonCommand);
-        const r = await exec(cmd, parts.slice(1), {
+        // 判分会执行模型写出的文件（solution.mjs / 交付物），必须与 run_js 同级沙箱，
+        // 否则"把 payload 写进交付物、让判分器替你跑"即可越狱。
+        const pre = cmd === process.execPath ? nodeSandboxArgs(workspace, cfg.sandboxNodePermission) : [];
+        const r = await exec(cmd, [...pre, ...parts.slice(1)], {
           cwd: workspace,
           timeoutMs: rule.timeout_ms ?? cfg.execTimeoutMs,
           maxOutput: cfg.maxOutputChars,

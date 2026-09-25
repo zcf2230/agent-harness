@@ -2,12 +2,18 @@
   "id": "g01",
   "name": "要点摘要",
   "category": "text",
-  "prompt": "阅读 article.md，把核心观点压缩成不超过 80 个汉字的中文摘要写入 summary.txt（只写摘要本身一行，必须包含术语「回环验证」四个字）。",
+  "difficulty": "hard",
+  "max_turns": 12,
+  "prompt": "阅读 article.md，把核心观点压缩成一段中文摘要写入 summary.txt（只写摘要本身一行，不超过 80 个汉字、且不少于 30 个汉字，必须包含术语「回环验证」）。写完后可运行 node verify.mjs 自检字数是否达标。",
   "workspace_files": [
     {
       "path": "article.md",
       "content": "# 为什么 Agent 产品需要评测闭环\n\n很多团队把 agent 理解为「提示词加函数调用」，上线后却发现行为极不稳定：同一个任务有时一次通过，有时反复绕圈。根本原因在于缺少评测闭环。传统软件靠单元测试守住行为边界，而 agent 的决策路径是模型即兴生成的，无法枚举，只能用任务集回放：把真实场景抽象成带判分标准的任务，持续对同一版本跑分，通过率、回合数、成本、失败归因才是可以指导迭代的信号。\n\n回环验证是评测闭环的核心：模型产出进入环境执行，环境的执行结果再喂回模型修正，最后由独立判分器验收。注意判分器必须独立于被评测的模型，否则等于让模型给自己打分，指标会系统性虚高。\n\n工程上还有两个常被忽视的点。一是上下文管理：长任务的历史会爆炸，需要按回合压缩并在压缩摘要中保留文件名、数字等可验证锚点，同时保留断点续跑能力，避免一次网络抖动浪费整轮成本。二是沙箱边界：agent 生成的代码必须假定有恶意或低级错误，工作区隔离、超时与输出上限缺一不可。\n\n结论是：模型决定上限，harness 决定下限。能把回环验证的通过率曲线稳定推高的团队，才真正把 agent 从演示品变成了可运维的系统。"
+    },
+    {
+      "path": "verify.mjs",
+      "content": "import fs from 'node:fs';\nlet s = '';\ntry { s = fs.readFileSync('summary.txt', 'utf8'); } catch { console.log('FAIL: summary.txt 不存在'); process.exit(1); }\nconst hanzi = (s.match(/[\\u4e00-\\u9fff]/g) || []).length;\nif (!s.includes('回环验证')) { console.log('FAIL: 缺少术语「回环验证」'); process.exit(1); }\nif (hanzi > 80) { console.log('FAIL: 汉字数 ' + hanzi + ' 超过 80'); process.exit(1); }\nif (hanzi < 30) { console.log('FAIL: 汉字数 ' + hanzi + ' 少于 30，不像完整摘要'); process.exit(1); }\nconsole.log('OK: 汉字数 ' + hanzi);\n"
     }
   ],
-  "grade": { "type": "file_regex", "path": "summary.txt", "pattern": "^(?=[\\s\\S]{1,240}$)[\\s\\S]*回环验证", "flags": "m" }
+  "grade": { "type": "run_test", "command": "node verify.mjs" }
 }

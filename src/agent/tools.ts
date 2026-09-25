@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { HarnessConfig } from '../config.ts';
 import type { ToolSpec } from '../types.ts';
 import { clip } from '../util.ts';
-import { relPath, runScript, safeResolve } from './sandbox.ts';
+import { relPath, runScript, safeResolve, nodeSandboxArgs } from './sandbox.ts';
 
 export interface ToolContext {
   workspace: string;
@@ -108,12 +108,6 @@ function fmtExec(r: { code: number; stdout: string; stderr: string; timedOut: bo
   if (!r.stdout.trim() && !r.stderr.trim()) s += '（无输出）';
   if (r.missing) s += '\n提示：若为 python，请在 config.json 中把 pythonCommand 设为完整路径。';
   return s.trimEnd();
-}
-
-function nodeSandboxArgs(workspace: string, cfg: HarnessConfig): string[] {
-  if (!cfg.sandboxNodePermission) return [];
-  const ws = path.resolve(workspace);
-  return ['--permission', `--allow-fs-read=${ws}`, `--allow-fs-write=${ws}`];
 }
 
 function walkFiles(dir: string, base: string, acc: { rel: string; abs: string }[], limit: number): void {
@@ -235,7 +229,7 @@ export async function executeTool(
         return done(true, hits.length ? clip(hits.join('\n'), cfg.maxOutputChars) : '无匹配');
       }
       case 'run_js': {
-        const pre = nodeSandboxArgs(ctx.workspace, cfg);
+        const pre = nodeSandboxArgs(ctx.workspace, cfg.sandboxNodePermission);
         const r = await runScript(ctx.workspace, 'mjs', String(args.code ?? ''), process.execPath, {
           cwd: ctx.workspace,
           timeoutMs: cfg.execTimeoutMs,

@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-09-24T14:49:21.416Z",
+  "model": "deepseek-chat",
+  "configs": [
+    {
+      "name": "baseline",
+      "note": "全部机制开启",
+      "passed": 22,
+      "total": 22,
+      "pass_rate": 100,
+      "mean_turns": 4.2,
+      "mean_prompt_tokens": 8361,
+      "mean_cost": 0.00972
+    },
+    {
+      "name": "no_compaction",
+      "note": "关上下文压缩",
+      "passed": 22,
+      "total": 22,
+      "pass_rate": 100,
+      "mean_turns": 4.6,
+      "mean_prompt_tokens": 8692,
+      "mean_cost": 0.009901
+    },
+    {
+      "name": "no_guardrail",
+      "note": "关收尾/交付物兜底",
+      "passed": 21,
+      "total": 22,
+      "pass_rate": 95.5,
+      "mean_turns": 4.7,
+      "mean_prompt_tokens": 8754,
+      "mean_cost": 0.009994
+    },
+    {
+      "name": "no_sandbox",
+      "note": "关 Node 权限沙箱",
+      "passed": 21,
+      "total": 22,
+      "pass_rate": 95.5,
+      "mean_turns": 4.1,
+      "mean_prompt_tokens": 7709,
+      "mean_cost": 0.008968
+    }
+  ]
+}
