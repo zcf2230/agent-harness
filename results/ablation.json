@@ -1,46 +1,63 @@
 {
-  "generated_at": "2026-09-24T14:49:21.416Z",
+  "generated_at": "2026-09-25T13:32:22.617Z",
   "model": "deepseek-chat",
+  "runs": 3,
   "configs": [
     {
       "name": "baseline",
       "note": "全部机制开启",
-      "passed": 22,
-      "total": 22,
-      "pass_rate": 100,
-      "mean_turns": 4.2,
-      "mean_prompt_tokens": 8361,
-      "mean_cost": 0.00972
+      "runs": 3,
+      "mean_pass_rate": 98.5,
+      "median_pass_rate": 100,
+      "min_pass_rate": 95.5,
+      "mean_turns": 4.4,
+      "mean_prompt_tokens": 7773,
+      "mean_cost": 0.008871,
+      "flaky_tasks": [
+        "g01"
+      ]
     },
     {
       "name": "no_compaction",
       "note": "关上下文压缩",
-      "passed": 22,
-      "total": 22,
-      "pass_rate": 100,
-      "mean_turns": 4.6,
-      "mean_prompt_tokens": 8692,
-      "mean_cost": 0.009901
+      "runs": 3,
+      "mean_pass_rate": 97,
+      "median_pass_rate": 95.5,
+      "min_pass_rate": 95.5,
+      "mean_turns": 4.3,
+      "mean_prompt_tokens": 7761,
+      "mean_cost": 0.008849,
+      "flaky_tasks": [
+        "g01"
+      ]
     },
     {
       "name": "no_guardrail",
       "note": "关收尾/交付物兜底",
-      "passed": 21,
-      "total": 22,
-      "pass_rate": 95.5,
-      "mean_turns": 4.7,
-      "mean_prompt_tokens": 8754,
-      "mean_cost": 0.009994
+      "runs": 3,
+      "mean_pass_rate": 97,
+      "median_pass_rate": 95.5,
+      "min_pass_rate": 95.5,
+      "mean_turns": 4.2,
+      "mean_prompt_tokens": 7422,
+      "mean_cost": 0.008493,
+      "flaky_tasks": [
+        "g01"
+      ]
     },
     {
       "name": "no_sandbox",
       "note": "关 Node 权限沙箱",
-      "passed": 21,
-      "total": 22,
-      "pass_rate": 95.5,
-      "mean_turns": 4.1,
-      "mean_prompt_tokens": 7709,
-      "mean_cost": 0.008968
+      "runs": 3,
+      "mean_pass_rate": 97,
+      "median_pass_rate": 95.5,
+      "min_pass_rate": 95.5,
+      "mean_turns": 4.3,
+      "mean_prompt_tokens": 7251,
+      "mean_cost": 0.008229,
+      "flaky_tasks": [
+        "g01"
+      ]
     }
   ]
 }
