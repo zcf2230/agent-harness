@@ -10,7 +10,7 @@
   "compactEnabled": true,
   "execTimeoutMs": 30000,
   "maxOutputChars": 20000,
-  "pythonCommand": "C:\\Users\\34264\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "pythonCommand": "python",
   "priceInputPerMTok": 1,
   "priceOutputPerMTok": 2,
   "currency": "¥",
