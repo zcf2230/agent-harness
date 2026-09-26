@@ -45,11 +45,14 @@
 
 <h1>Agent Harness 项目交接报告</h1>
 <div class="meta">
-  日期：2026-09-25 ｜ 作者：<a href="https://github.com/zcf2230">zcf2230</a> ｜
-  仓库：<a href="https://github.com/zcf2230/agent-harness">github.com/zcf2230/agent-harness</a>（public，MIT）
+  日期：2026-09-26 ｜ 作者：<a href="https://github.com/zcf2230">zcf2230</a> ｜
+  仓库：<a href="https://github.com/zcf2230/agent-harness">github.com/zcf2230/agent-harness</a>（public，MIT）｜ HEAD <code>cb7b5ea</code>
 </div>
 <div class="meta">
-  <span class="tag">零依赖 TypeScript</span><span class="tag">Agent 运行时</span><span class="tag">评测闭环</span><span class="tag">MCP</span><span class="tag">消融实验</span>
+  配套技术文章（稀土掘金 · 人工智能分区）：<a href="https://juejin.cn/post/7689045619357499401">juejin.cn/post/7689045619357499401</a>
+</div>
+<div class="meta">
+  <span class="tag">零依赖 TypeScript</span><span class="tag">Agent 运行时</span><span class="tag">评测闭环</span><span class="tag">MCP</span><span class="tag">消融实验</span><span class="tag">面试准备包</span><span class="tag">技术文章</span>
 </div>
 
 <div class="callout">
@@ -113,10 +116,12 @@
 
 <h2>五、关键数据与证据（均可复现）</h2>
 <div class="grid">
+  <div class="kpi"><b>2872</b><span>行零依赖 TS / 17 模块 / 无构建</span></div>
   <div class="kpi"><b>88</b><span>项离线自检断言，全绿；CI 通过</span></div>
   <div class="kpi"><b>4 + 3</b><span>真实跑分修复 4 个跨层缺陷 + 评审后修 3 个安全/完整性问题</span></div>
   <div class="kpi"><b>22</b><span>任务 / 7 能力域 / 4 类判分器</span></div>
-  <div class="kpi"><b>main</b><span>默认分支（master 已删）</span></div>
+  <div class="kpi"><b>main</b><span>默认分支（master 已删）· HEAD cb7b5ea</span></div>
+  <div class="kpi"><b>1 篇</b><span>掘金技术文章（人工智能分区），已 README 链接</span></div>
 </div>
 
 <div class="callout warn">
@@ -165,7 +170,7 @@
 <div class="callout warn">
 <ul>
   <li><b>沙箱残留</b>：Node 权限模型不拦截网络；<code>run_py</code> 无对等的零依赖隔离（工具层路径约束 + 超时）。生产需容器后端。</li>
-  <li><b>判分文件可写</b>：run_test 类任务的验收脚本仍位于可写工作区内，模型理论上可改写它（g01 已改可执行校验，但 c03/x01/x02 的 test 文件保护是下一步：只读/哈希校验）。</li>
+  <li><b>判分文件保护（已加固）</b>：验收脚本标 <code>protected</code>——write_file 拒改 + 判分前 sha256 校验（HEAD <code>13e541b</code>），模型用 run_js 偷改 test 文件会被判 <code>grader_tampered</code>；自检已锁死该路径。</li>
   <li><b>压缩触发</b>：保留组已改为随 token 预算缩放（不再硬编码 keep=4），真实跑分中 x07/x10 现能触发压缩（compactions=1）；但多数任务仍 ≤8 回合完成，压缩只在长链/紧预算下生效。</li>
   <li><b>度量数字待重测</b>：可靠性/消融的具体百分比当前不主张，需 R≥3 配对重测。</li>
   <li><b>单模型</b>：仅对 deepseek-chat 评测过。</li>
@@ -181,7 +186,28 @@ node src/cli.ts eval --all --yes         # 真实评测（需 DEEPSEEK_API_KEY�
 node src/cli.ts bench --all --runs 3 --yes   # pass@R / 方差 / flaky
 node src/cli.ts ablate --all --yes       # 消融对照表</code></pre>
 
-<h2>九、给审阅者的评价维度与建议征集</h2>
+<h2>九、本轮新增交付物：面试准备 + 技术文章</h2>
+<p>代码工程完成并通过 CI 后，本轮把"可被检阅 / 可被面试追问 / 可对外发布"这三件事补齐：</p>
+<ul>
+  <li><b>面试准备手册（通用版）</b>：电梯陈述、架构、7 大机制逐条深挖、诚实数据、Q&amp;A 题库、5 条深度追问链（L1→L3/L4）、英文 section、现场演示脚本、一页速记。</li>
+  <li><b>面试准备手册（AI/LLM 应用工程师 岗位定向版）</b>：换到"应用工程师"口径重组——岗位能力对齐表 + 按能力项的 Q&amp;A（Agent 编排 / prompt·工具设计 / provider 抽象 / 上下文工程 / 评测闭环 / 成本·延迟兜底 / MCP 生态 / prompt-injection 安全 / 可观测）+ 5 条岗位向追问链。</li>
+  <li><b>技术文章（已发布）</b>：《我做了个零依赖 Agent Harness，然后用评测证伪了自己》，投稀土掘金「人工智能」分区、标签 <code>Agent</code>；核心卖点是"用 R=3 配对消融证伪并撤回了自己首轮的 +4.5%/−4% 结论"这一反直觉、强差异化的诚实叙事。所有数字先跑仓库核对（含实跑 <code>selftest=88/0</code>）再写，正文不含任何 API key。</li>
+  <li><b>README 反哺仓库</b>：在 README 顶部加"配套技术文章"链接，提交 <code>cb7b5ea</code> 已推送 <code>main</code>。</li>
+</ul>
+<h3>交付物清单与位置</h3>
+<table>
+  <tr><th>交付物</th><th>位置</th><th>状态</th></tr>
+  <tr><td>源码仓库</td><td><a href="https://github.com/zcf2230/agent-harness">github.com/zcf2230/agent-harness</a>（main · cb7b5ea）</td><td>公开 · CI 绿</td></tr>
+  <tr><td>技术文章</td><td><a href="https://juejin.cn/post/7689045619357499401">juejin.cn/post/7689045619357499401</a></td><td>已发布（审核通过）</td></tr>
+  <tr><td>本交接报告</td><td><code>agent-harness/交接报告.html</code> · <code>面试准备-agent-harness/</code></td><td>本文件</td></tr>
+  <tr><td>面试准备（通用 / 岗位版）</td><td><code>面试准备-agent-harness/面试准备.html(.pdf)</code>、<code>面试准备-AI应用工程师.html(.pdf)</code></td><td>就绪</td></tr>
+  <tr><td>文章 Markdown 源</td><td><code>面试准备-agent-harness/掘金文章-agent-harness.md</code></td><td>就绪</td></tr>
+  <tr><td>可分享产物副本</td><td><code>面试准备-agent-harness/产出/</code></td><td>已脱敏：不含 <code>config.json</code>/<code>runs/</code>/<code>node_modules</code></td></tr>
+</table>
+<div class="callout warn">
+<b>安全确认</b>：真实评测使用 DeepSeek API，密钥<b>只经环境变量 <code>DEEPSEEK_API_KEY</code></b> 注入；本地 <code>config.json</code> 与 <code>runs/</code> 已在 <code>.gitignore</code>，仓库与对外产物副本均不含密钥与运行数据。</div>
+
+<h2>十、给审阅者的评价维度与建议征集</h2>
 <p>恳请重点评估以下方面，并指出我可能高估/低估之处：</p>
 <ol>
   <li><b>工程深度与真实性</b>：OS 强制沙箱、上下文压缩+续跑、MCP 客户端的实现是否扎实、有无"为简历堆词"之嫌？</li>
