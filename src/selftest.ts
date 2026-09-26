@@ -471,6 +471,20 @@ async function testBench(): Promise<void> {
   check('每轮通过率各 50%，标准差 0', bench.per_run_pass_rate.join(',') === '50,50' && bench.std_pass_rate === 0, JSON.stringify(bench.per_run_pass_rate));
 }
 
+async function testStats(): Promise<void> {
+  section('配对统计（Wilson CI / McNemar 精确检验）');
+  const { wilsonCI, mcNemarExact } = await import('./eval/runner.ts');
+  check('McNemar 无不一致对 → p=1', mcNemarExact(0, 0) === 1, String(mcNemarExact(0, 0)));
+  check('McNemar 对称(b=c) → p=1（不显著）', mcNemarExact(5, 5) === 1, String(mcNemarExact(5, 5)));
+  check('McNemar 单侧全反(b=10,c=0) → p≈2·0.5^10', Math.abs(mcNemarExact(10, 0) - 2 * Math.pow(0.5, 10)) < 1e-9, String(mcNemarExact(10, 0)));
+  const w0 = wilsonCI(0, 0);
+  check('Wilson n=0 返回 [0,0]', w0[0] === 0 && w0[1] === 0, JSON.stringify(w0));
+  const w5 = wilsonCI(33, 66);
+  check('Wilson p̂=0.5 区间约 38–62', w5[0] > 30 && w5[0] < 45 && w5[1] > 55 && w5[1] < 70, JSON.stringify(w5));
+  check('Wilson 全通过(66/66) 上界=100', wilsonCI(66, 66)[1] === 100, JSON.stringify(wilsonCI(66, 66)));
+  check('Wilson 单调：20/66 上界 < 33/66 上界', wilsonCI(20, 66)[1] < w5[1], JSON.stringify([wilsonCI(20, 66)[1], w5[1]]));
+}
+
 async function main(): Promise<void> {
   console.log('agent-harness 离线自检（不调用真实 API）');
   await testSandbox();
@@ -486,6 +500,7 @@ async function main(): Promise<void> {
   await testGraders();
   await testEvalE2E();
   await testBench();
+  await testStats();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
   console.log(`\n结果: ${passed} 通过 / ${failed} 失败`);
   if (failed > 0) process.exit(1);

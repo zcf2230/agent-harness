@@ -6,7 +6,7 @@
 ## 可安全主张的事实（有代码/自检/轨迹支撑）
 
 - 零依赖 TypeScript，Node 原生运行（≥23.6），无构建、无第三方包；约 2.9k 行、17 个模块。
-- **90 项离线自检断言全绿**，GitHub Actions CI（无需 API key 即可回归）。
+- **97 项离线自检断言全绿**，GitHub Actions CI（无需 API key 即可回归）。
 - 组件：受沙箱约束的多轮工具循环、上下文压缩（回合分组 + LLM 摘要 + 规则兜底）、断点续跑（事件溯源 + 原子快照）、
   独立判分器（4 类）、MCP 客户端（手写 stdio JSON-RPC）、轨迹回放、并发评测 runner、成本核算。
 - **22 任务 / 7 能力域**评测套件；真实 DeepSeek 跑分**定位并修复 4 个 mock 测不到的跨层缺陷**
@@ -33,13 +33,13 @@
 - 构建 **22 任务 / 4 类判分器**的评测套件，用真实 API 跑分**定位并修复 4 个跨层缺陷**；经第三方评审再修复 3 个安全/完整性问题。
 - 提出并实现**多次跑分可靠性度量（pass@R + 方差 + flaky 归因）与 R=3 配对消融**；用它**主动证伪了自己首轮的机制结论**
   （四配置在噪声内、g01 才是真实前沿），体现评测严谨与自我批判。
-- 编写 **90 项离线自检**、`tsc --noEmit` 类型门禁并配置 **GitHub Actions CI**，保证核心机制在迭代中不劣化。
+- 编写 **97 项离线自检**、`tsc --noEmit` 类型门禁并配置 **GitHub Actions CI**，保证核心机制在迭代中不劣化。
 
 ## 中文 · 精简版（2 条）
 
 - 独立实现零依赖 TS Agent Harness：OS 强制沙箱 + 凭据白名单、上下文压缩+断点续跑、独立判分、MCP 客户端；
   22 任务套件真实跑分定位并修复 4 个跨层缺陷 + 3 个安全问题。
-- 设计 pass@R/方差/flaky 可靠性度量与 R=3 配对消融；用它**证伪了自己首轮的机制结论**（诚实）；90 项自检 + 类型门禁 + CI 全绿。
+- 设计 pass@R/方差/flaky 可靠性度量与 R=3 配对消融；用它**证伪了自己首轮的机制结论**（诚实）；97 项自检 + 类型门禁 + CI 全绿。
 
 ## English · Full (defensible version)
 
@@ -52,7 +52,7 @@
   review drove 3 further security/integrity fixes.
 - Introduced **repeated-run reliability metrics (pass@R + variance + flaky attribution)** and an ablation harness; can articulate
   why the first single-run ablation was not statistically valid (noise, null control, over-loose gold) and how to fix it.
-- 90 offline assertions gated by GitHub Actions CI.
+- 97 offline assertions gated by GitHub Actions CI.
 
 ## 面试话术 / 追问应对
 

@@ -176,6 +176,9 @@ export interface AblationRow {
   mean_prompt_tokens: number;
   mean_cost: number;
   flaky_tasks: string[];
+  // 配对统计：pooled 通过率的 Wilson 95% 置信区间（%），以及相对 baseline 的 McNemar 精确检验
+  wilson_ci?: [number, number];
+  mcnemar?: { vs: string; b: number; c: number; n: number; p: number };
 }
 
 function median(xs: number[]): number {
@@ -183,6 +186,33 @@ function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// Wilson score 95% 区间（对小样本 / 极端比例比正态近似稳健）。返回百分比上下界。
+export function wilsonCI(k: number, n: number, z = 1.96): [number, number] {
+  if (n <= 0) return [0, 0];
+  const ph = k / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const center = (ph + z2 / (2 * n)) / denom;
+  const margin = (z / denom) * Math.sqrt((ph * (1 - ph)) / n + z2 / (4 * n * n));
+  const lo = Math.max(0, center - margin);
+  const hi = Math.min(1, center + margin);
+  return [Math.round(lo * 1000) / 10, Math.round(hi * 1000) / 10];
+}
+
+// McNemar 精确（二项）双尾检验：不一致对 b、c，H0 下 X~Bin(b+c,0.5)，p=2·P(X≤min(b,c))，封顶 1。
+export function mcNemarExact(b: number, c: number): number {
+  const n = b + c;
+  if (n === 0) return 1;
+  const m = Math.min(b, c);
+  let term = Math.pow(0.5, n); // C(n,0)·0.5^n
+  let sum = term;
+  for (let i = 1; i <= m; i++) {
+    term *= (n - i + 1) / i;
+    sum += term;
+  }
+  return Math.min(1, 2 * sum);
 }
 
 export async function runAblation(o: {
@@ -198,6 +228,8 @@ export async function runAblation(o: {
   const dir = o.batchDir ?? path.join(o.cfg.runsDir, `ablation-${batchTs()}`);
   fs.mkdirSync(dir, { recursive: true });
   const rows: AblationRow[] = [];
+  const cells: Map<string, boolean>[] = []; // 每配置：key=`${task_id}#${run}` → pass，用于跨配置配对
+  const pooled: { k: number; n: number }[] = [];
   for (const c of o.configs) {
     const cfg: HarnessConfig = { ...o.cfg, ...c.override };
     const allRecs: TaskRecord[][] = [];
@@ -216,11 +248,21 @@ export async function runAblation(o: {
     const perRunRates = allRecs.map((recs) => (recs.filter((x) => x.pass).length / Math.max(1, recs.length)) * 100);
     const flat = allRecs.flat();
     const byTask = new Map<string, boolean[]>();
+    const cell = new Map<string, boolean>();
+    let pk = 0;
+    allRecs.forEach((recs, ri) => {
+      for (const rec of recs) {
+        cell.set(`${rec.task_id}#${ri}`, rec.pass);
+        if (rec.pass) pk++;
+      }
+    });
     for (const rec of flat) {
       const arr = byTask.get(rec.task_id) ?? [];
       arr.push(rec.pass);
       byTask.set(rec.task_id, arr);
     }
+    cells.push(cell);
+    pooled.push({ k: pk, n: Math.max(1, flat.length) });
     const flaky_tasks = [...byTask.entries()].filter(([, ps]) => ps.some(Boolean) && !ps.every(Boolean)).map(([id]) => id);
     rows.push({
       name: c.name,
@@ -233,16 +275,33 @@ export async function runAblation(o: {
       mean_prompt_tokens: Math.round(mean(flat.map((r) => r.prompt_tokens))),
       mean_cost: Math.round(mean(flat.map((r) => r.cost)) * 1e6) / 1e6,
       flaky_tasks,
+      wilson_ci: wilsonCI(pk, flat.length),
     });
   }
+  // 相对 baseline（首个配置）做 McNemar 配对精确检验
+  const baseCells = cells[0];
+  for (let i = 1; i < rows.length; i++) {
+    let b = 0; // baseline pass、该配置 fail
+    let cc = 0; // baseline fail、该配置 pass
+    for (const [key, bp] of baseCells) {
+      const cp = cells[i].get(key);
+      if (cp === undefined) continue;
+      if (bp && !cp) b++;
+      else if (!bp && cp) cc++;
+    }
+    rows[i].mcnemar = { vs: rows[0].name, b, c: cc, n: b + cc, p: mcNemarExact(b, cc) };
+  }
   fs.writeFileSync(path.join(dir, 'ablation.json'), JSON.stringify({ generated_at: new Date().toISOString(), model: o.cfg.model, runs, configs: rows }, null, 2));
-  process.stdout.write(`\n===== 消融对照（${o.tasks.length} 任务 × ${runs} 轮）=====\n`);
-  process.stdout.write(`${padCell('配置', 16)}${padCell('均值%', 8)}${padCell('中位%', 8)}${padCell('最低%', 8)}${padCell('均回合', 8)}${padCell('ptok', 8)}费用  flaky\n`);
+  process.stdout.write(`\n===== 消融对照（${o.tasks.length} 任务 × ${runs} 轮 = ${o.tasks.length * runs} 次任务运行/配置）=====\n`);
+  process.stdout.write(`${padCell('配置', 16)}${padCell('均值%', 8)}${padCell('Wilson95%', 16)}${padCell('McNemar p', 12)}${padCell('均回合', 8)}${padCell('ptok', 8)}费用  flaky\n`);
   for (const r of rows) {
+    const ci = r.wilson_ci ? `${r.wilson_ci[0]}–${r.wilson_ci[1]}` : '—';
+    const mp = r.mcnemar ? `${r.mcnemar.p.toFixed(3)} (b=${r.mcnemar.b},c=${r.mcnemar.c})` : r === rows[0] ? 'baseline' : '—';
     process.stdout.write(
-      `${padCell(r.name, 16)}${padCell(String(r.mean_pass_rate), 8)}${padCell(String(r.median_pass_rate), 8)}${padCell(String(r.min_pass_rate), 8)}${padCell(String(r.mean_turns), 8)}${padCell(String(r.mean_prompt_tokens), 8)}${r.mean_cost.toFixed(4)}  ${r.flaky_tasks.join(',') || '—'}\n`
+      `${padCell(r.name, 16)}${padCell(String(r.mean_pass_rate), 8)}${padCell(ci, 16)}${padCell(mp, 12)}${padCell(String(r.mean_turns), 8)}${padCell(String(r.mean_prompt_tokens), 8)}${r.mean_cost.toFixed(4)}  ${r.flaky_tasks.join(',') || '—'}\n`
     );
   }
+  process.stdout.write(`注：McNemar 为相对 ${rows[0]?.name ?? 'baseline'} 的配对精确二项检验；n=${runs} 轮功效有限，p 值仅供参考而非"证明无效"。\n`);
   process.stdout.write(`→ ${path.join(dir, 'ablation.json')}\n`);
   return { dir, rows };
 }
