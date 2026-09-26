@@ -97,6 +97,10 @@ export async function executeTask(opts: {
     state = RunLog.loadState(opts.runDir);
     log.event('resume', { from: state.started_at, turn: state.turn });
     opts.print?.(`↺ 从回合 ${state.turn} 续跑`);
+    // 续跑同样要保住判分独立性：按任务定义重建 protectedSet，并以当前 protected 文件内容作哈希基线，
+    // 这样续跑段内模型若改写验收脚本，仍会在下方 tamperedFiles 校验中被判 grader_tampered。
+    protectedSet = new Set((task.workspace_files ?? []).filter((f) => f.protected).map((f) => f.path));
+    baselineHashes = hashFiles(workspace, protectedSet);
   } else {
     const protectedPaths = setupWorkspace(task, workspace);
     state = newRunState(task, cfg);

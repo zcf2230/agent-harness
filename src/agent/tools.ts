@@ -199,10 +199,16 @@ export async function executeTool(
       }
       case 'find_text': {
         let re: RegExp;
-        if (args.regex) {
-          re = new RegExp(String(args.pattern), 'g');
-        } else {
-          re = new RegExp(String(args.pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        const rawPat = String(args.pattern ?? '');
+        if (rawPat.length > 200) {
+          return done(false, '错误: find_text 正则/模式过长（上限 200 字符），请缩小匹配范围');
+        }
+        try {
+          re = args.regex
+            ? new RegExp(rawPat, 'g')
+            : new RegExp(rawPat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        } catch (e: any) {
+          return done(false, `错误: 非法正则表达式：${e?.message ?? e}`);
         }
         const max = Math.min(100, args.max_results ?? 30);
         const start = safeResolve(ctx.workspace, args.path ?? '.');

@@ -125,7 +125,8 @@ export async function compactMessages(
   ];
   const after = estimate(out);
   if (after >= before) {
-    return { ...NO_COMPACT, before, after: before, method: 'no-benefit' };
+    // 摘要调用已经发生、token 已花费：no-benefit 也要把 usage 带出去，否则成本核算漏计这次调用。
+    return { ...NO_COMPACT, before, after: before, method: 'no-benefit', usage };
   }
   return { compacted: true, before, after, method, droppedGroups: dropped.length, messages: out, usage };
 }
@@ -163,10 +164,11 @@ export async function maybeCompact(
   const result = await compactMessages(provider, state.messages, keepGroups);
   if (result.compacted && result.messages) {
     state.messages = result.messages;
-    if (result.usage) {
-      state.usage.prompt_tokens += result.usage.prompt_tokens;
-      state.usage.completion_tokens += result.usage.completion_tokens;
-    }
+  }
+  // 摘要调用无论是否最终采纳都真实产生了 token/成本：只要带 usage 就累计，兑现"压缩自身计入成本"。
+  if (result.usage) {
+    state.usage.prompt_tokens += result.usage.prompt_tokens;
+    state.usage.completion_tokens += result.usage.completion_tokens;
   }
   return result;
 }

@@ -77,6 +77,10 @@ async function testTools(): Promise<void> {
   check('read_file 读回内容', r.ok && r.output.includes('标记ABC'), r.output);
   const f = await executeTool(ctx, 'find_text', JSON.stringify({ pattern: '标记ABC' }));
   check('find_text 命中', f.ok && f.output.includes('src/a.mjs:2'), f.output);
+  const fbad = await executeTool(ctx, 'find_text', JSON.stringify({ pattern: '(unclosed', regex: true }));
+  check('find_text 非法正则被兜住而非抛错', !fbad.ok && fbad.output.includes('非法正则'), fbad.output);
+  const flong = await executeTool(ctx, 'find_text', JSON.stringify({ pattern: 'a'.repeat(300), regex: true }));
+  check('find_text 超长模式被拒', !flong.ok && flong.output.includes('过长'), flong.output);
   const l = await executeTool(ctx, 'list_files', JSON.stringify({}));
   check('list_files 列出结构', l.ok && l.output.includes('a.mjs'), l.output);
   const j = await executeTool(ctx, 'run_js', JSON.stringify({ code: "console.log(6*7);" }));

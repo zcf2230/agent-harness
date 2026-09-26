@@ -117,7 +117,7 @@
 <h2>五、关键数据与证据（均可复现）</h2>
 <div class="grid">
   <div class="kpi"><b>2872</b><span>行零依赖 TS / 17 模块 / 无构建</span></div>
-  <div class="kpi"><b>88</b><span>项离线自检断言，全绿；CI 通过</span></div>
+  <div class="kpi"><b>90</b><span>项离线自检断言，全绿；CI 通过</span></div>
   <div class="kpi"><b>4 + 3</b><span>真实跑分修复 4 个跨层缺陷 + 评审后修 3 个安全/完整性问题</span></div>
   <div class="kpi"><b>22</b><span>任务 / 7 能力域 / 4 类判分器</span></div>
   <div class="kpi"><b>main</b><span>默认分支（master 已删）· HEAD cb7b5ea</span></div>
@@ -147,7 +147,7 @@
   <tr><td>关闭收尾/交付物兜底</td><td>97.0</td><td>95.5</td><td>95.5</td><td>7422</td><td>g01</td></tr>
   <tr><td>关闭 Node 权限沙箱</td><td>97.0</td><td>95.5</td><td>95.5</td><td>7251</td><td>g01</td></tr>
 </table>
-<p><b>结论（R=3 配对重测，已推翻首轮）</b>：按评审建议把消融从 n=1 改为<b>每配置 R=3 配对</b>重跑（264 次真实调用）后，
+<p><b>结论（R=3 配对重测，已推翻首轮）</b>：按评审建议把消融从 n=1 改为<b>每配置 R=3 配对</b>重跑（4 配置 × 22 任务 × 3 轮 = 264 次任务运行，每次含多轮真实 API 调用）后，
 四个配置<b>全落在噪声带内</b>（均值差 1.5%、中位几乎一致），<b>g01 在 baseline 里也 flaky</b>，"关压缩"的 prompt token
 与 baseline 几乎相同（7773→7761）。即：<b>在 R=3 下没有任何机制呈现可统计分辨的通过率效应，早期"护栏 +4.5%""压缩 −4%"的单轮结论被本次重测证伪。</b>
 唯一稳定可复现的信号是<b>开放式任务 g01 的终止 flakiness</b>，且现有护栏并不能可靠消除它。这份"自我证伪"数据保留在 <code>results/ablation.json</code>。</p>
@@ -181,7 +181,7 @@
 <h2>八、复现与验证</h2>
 <pre><code>export PATH="/usr/bin:/bin:$PATH"
 cd agent-harness
-node src/cli.ts selftest                 # 88 项离线断言（无需 key）
+node src/cli.ts selftest                 # 90 项离线断言（无需 key）
 node src/cli.ts eval --all --yes         # 真实评测（需 DEEPSEEK_API_KEY）
 node src/cli.ts bench --all --runs 3 --yes   # pass@R / 方差 / flaky
 node src/cli.ts ablate --all --yes       # 消融对照表</code></pre>
@@ -191,7 +191,7 @@ node src/cli.ts ablate --all --yes       # 消融对照表</code></pre>
 <ul>
   <li><b>面试准备手册（通用版）</b>：电梯陈述、架构、7 大机制逐条深挖、诚实数据、Q&amp;A 题库、5 条深度追问链（L1→L3/L4）、英文 section、现场演示脚本、一页速记。</li>
   <li><b>面试准备手册（AI/LLM 应用工程师 岗位定向版）</b>：换到"应用工程师"口径重组——岗位能力对齐表 + 按能力项的 Q&amp;A（Agent 编排 / prompt·工具设计 / provider 抽象 / 上下文工程 / 评测闭环 / 成本·延迟兜底 / MCP 生态 / prompt-injection 安全 / 可观测）+ 5 条岗位向追问链。</li>
-  <li><b>技术文章（已发布）</b>：《我做了个零依赖 Agent Harness，然后用评测证伪了自己》，投稀土掘金「人工智能」分区、标签 <code>Agent</code>；核心卖点是"用 R=3 配对消融证伪并撤回了自己首轮的 +4.5%/−4% 结论"这一反直觉、强差异化的诚实叙事。所有数字先跑仓库核对（含实跑 <code>selftest=88/0</code>）再写，正文不含任何 API key。</li>
+  <li><b>技术文章（已发布）</b>：《我做了个零依赖 Agent Harness，然后用评测证伪了自己》，投稀土掘金「人工智能」分区、标签 <code>Agent</code>；核心卖点是"用 R=3 配对消融证伪并撤回了自己首轮的 +4.5%/−4% 结论"这一反直觉、强差异化的诚实叙事。所有数字先跑仓库核对（含实跑 <code>selftest=90/0</code>）再写，正文不含任何 API key。</li>
   <li><b>README 反哺仓库</b>：在 README 顶部加"配套技术文章"链接，提交 <code>cb7b5ea</code> 已推送 <code>main</code>。</li>
 </ul>
 <h3>交付物清单与位置</h3>

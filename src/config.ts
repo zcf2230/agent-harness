@@ -42,6 +42,8 @@ export const DEFAULTS: HarnessConfig = {
   sandboxNodePermission: true,
   terminationNudge: true,
   runsDir: 'runs',
+  // 默认为 DeepSeek-chat 的近似牌价（按缓存未命中口径），单位 元/百万 token。
+  // 仅为可配置兜底：真实账单请以 DeepSeek 现行价目表为准，并按 config.json 覆盖。
   priceInputPerMTok: 1,
   priceOutputPerMTok: 2,
   currency: '¥',
